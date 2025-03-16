@@ -1,4 +1,4 @@
-import AddressesPage from "@/components/views/Addresse/adresses";
+import AddressesPage from "@/components/views/Requests/requests";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
