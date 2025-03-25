@@ -112,7 +112,7 @@ export default function LoginPage() {
         setLoading(false);
         const token = res.data.token;
         Cookies.set('auth_token', token, { expires: 1 });
-        login({ id: res.data.id || '1', phone: phone, token });
+        login({ id: res.data.user?._id || '1', phone: phone, token });
         toast({
           variant: 'success',
           title: 'موفقیت',

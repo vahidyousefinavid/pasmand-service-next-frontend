@@ -37,14 +37,14 @@ const items = [
         bgColor: 'bg-[hsl(25,84%,48%)]/10',
         href: 'requests'
     },
-    {
-        icon: <Cross className="h-7 w-7" />,
-        title: 'ثبت درخواست جدید',
-        description: 'درخواست جمع آوری جهت تصفیه و کمک به محیط زیست',
-        color: 'text-[hsl(25,84%,48%)]',
-        bgColor: 'bg-[hsl(25,84%,48%)]/10',
-        href: '/new-request'
-    },
+    // {
+    //     icon: <Cross className="h-7 w-7" />,
+    //     title: 'ثبت درخواست جدید',
+    //     description: 'درخواست جمع آوری جهت تصفیه و کمک به محیط زیست',
+    //     color: 'text-[hsl(25,84%,48%)]',
+    //     bgColor: 'bg-[hsl(25,84%,48%)]/10',
+    //     href: '/new-request'
+    // },
     {
         icon: <Banknote className="h-7 w-7" />,
         title: 'تعرفه قیمت‌ها',
@@ -53,14 +53,14 @@ const items = [
         bgColor: 'bg-[hsl(25,84%,48%)]/10',
         href: 'tariff'
     },
-    {
-        icon: <FileClock className="h-7 w-7" />,
-        title: 'سوابق جمع آوری',
-        description: ' لیست سوابق درخواست های شما',
-        color: 'text-[hsl(25,84%,48%)]',
-        bgColor: 'bg-[hsl(25,84%,48%)]/10',
-        href: 'history'
-    },
+    // {
+    //     icon: <FileClock className="h-7 w-7" />,
+    //     title: 'سوابق جمع آوری',
+    //     description: ' لیست سوابق درخواست های شما',
+    //     color: 'text-[hsl(25,84%,48%)]',
+    //     bgColor: 'bg-[hsl(25,84%,48%)]/10',
+    //     href: 'history'
+    // },
     {
         icon: <HelpCircle className="h-7 w-7" />,
         title: 'راهنمای استفاده',

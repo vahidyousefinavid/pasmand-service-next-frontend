@@ -1,9 +1,40 @@
 "use client"
 import React, { useEffect, useState } from 'react';
-import { MapPin, Eye, Plus, X, Trash, Scale, Recycle } from 'lucide-react';
+import { MapPin, Eye, Plus, X, Trash, Scale, Recycle, Filter } from 'lucide-react';
 import { axiosService } from '@/lib/axiosService';
 import { toast } from '@/hooks/use-toast';
 import { API } from '@/services/const';
+import dynamic from 'next/dynamic';
+import { useAuth } from '@/context/auth-context';
+
+const MapWithNoSSR = dynamic(() => import('@/components/views/NewRequest/steps/map-component'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
+      در حال بارگذاری نقشه...
+    </div>
+  ),
+});
+
+interface TimeSlot {
+  date: string;
+  time: string;
+  _id: string;
+}
+
+interface Location {
+  lat: number;
+  lng: number;
+  title?: string;
+  address?: string;
+}
+
+interface User {
+  _id: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+}
 
 interface Material {
   _id: string;
@@ -15,19 +46,21 @@ interface Material {
 }
 
 interface Request {
-  id: string;
-  title: string;
-  status: 'pending' | 'processing' | 'completed';
-  address: {
-    title: string;
-    fullAddress: string;
-    location: {
-      lat: number;
-      lng: number;
-    };
-  };
-  materials: Material[];
-  createdAt: string;
+  _id: string;
+  description: string;
+  status: 'pending' | 'collecting' | 'completed' | 'cancelled';
+  location: Location;
+  items: Material[];
+  date: string;
+  timeSlot: TimeSlot;
+  totalPrice: number;
+  user: User;
+  collector?: User;
+}
+
+interface RequestBody {
+  userId?: string;
+  status?: string;
 }
 
 const units = [
@@ -43,37 +76,19 @@ const units = [
     title: 'تن',
     key: 'ton'
   }
-]
+];
 
-const mockRequests: Request[] = [
-  {
-    id: '1',
-    title: 'درخواست بازیافت ۱',
-    status: 'pending',
-    address: {
-      title: 'خانه',
-      fullAddress: 'تهران، خیابان ولیعصر، کوچه مهر',
-      location: { lat: 35.6892, lng: 51.3890 }
-    },
-    materials: [],
-    createdAt: '2024-03-10'
-  },
-  {
-    id: '2',
-    title: 'درخواست بازیافت ۲',
-    status: 'processing',
-    address: {
-      title: 'محل کار',
-      fullAddress: 'تهران، سعادت آباد، خیابان علامه',
-      location: { lat: 35.7219, lng: 51.3347 }
-    },
-    materials: [],
-    createdAt: '2024-03-11'
-  }
+const statusOptions = [
+  { value: '', label: 'همه' },
+  { value: 'pending', label: 'در انتظار' },
+  { value: 'collecting', label: 'در حال جمع‌آوری' },
+  { value: 'completed', label: 'تکمیل شده' },
+  { value: 'cancelled', label: 'لغو شده' }
 ];
 
 function RequestsPage() {
-  const [requests, setRequests] = useState<Request[]>(mockRequests);
+  const { user } = useAuth()
+  const [requests, setRequests] = useState<Request[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -82,29 +97,67 @@ function RequestsPage() {
   const [loading, setLoading] = useState(false);
   const [materialTypes, setMaterialTypes] = useState<Material[]>([]);
   const [error, setError] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const defaultCenter = { lat: 35.6892, lng: 51.3890 }; // تهران
 
   const getData = () => {
-    setLoading(true)
+    setLoading(true);
     axiosService({
       url: API.GET_MATERIAL,
       method: 'get',
     })
       .then((res: any) => {
-        setMaterialTypes(res?.data)
-        setLoading(false)
-      }).catch((err) => {
+        setMaterialTypes(res?.data);
+        setLoading(false);
+      })
+      .catch((err) => {
         toast({
           variant: 'destructive',
           title: 'ناموفق',
           description: 'متاسفانه انجام نشد صفحه را دوباره بارگزاری کنید',
         });
-        setLoading(false)
+        setLoading(false);
+      });
+  };
+
+  const getRequests = () => {
+    setLoading(true);
+    const requestBody: RequestBody = {
+      userId: user?.id // این مقدار باید از context یا store گرفته شود
+    };
+
+    if (selectedStatus) {
+      requestBody.status = selectedStatus;
+    }
+
+    axiosService({
+      url: API.GET_REQUESTS,
+      method: 'post',
+      body: requestBody
+    })
+      .then((res: any) => {
+        setRequests(res?.data?.results || []);
+        setLoading(false);
       })
-  }
+      .catch((err) => {
+        toast({
+          variant: 'destructive',
+          title: 'ناموفق',
+          description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
+        });
+        setLoading(false);
+      });
+  };
 
   useEffect(() => {
-    getData()
-  }, [])
+    getData();
+  }, []);
+
+  useEffect(() => {
+    if(user?.id){
+      getRequests();
+    }
+  }, [selectedStatus,user]);
 
   const handleAddMaterial = () => {
     setError('');
@@ -128,12 +181,14 @@ function RequestsPage() {
     }
   };
 
+  console.log(materials);
+  
   const handleRemoveMaterial = (id: string) => {
     setMaterials(materials.filter(m => m._id !== id));
   };
 
   const formatUnit = (unit: string) => {
-    return units.find((item) => item?.key === unit)?.title
+    return units.find((item) => item?.key === unit)?.title;
   };
 
   const calculateItemPrice = (material: Material) => {
@@ -145,16 +200,31 @@ function RequestsPage() {
   };
 
   const handleSaveRequest = () => {
-    if (selectedRequest && materials.length > 0) {
-      const updatedRequests = requests.map(req =>
-        req.id === selectedRequest.id
-          ? { ...req, materials: materials }
-          : req
-      );
-      setRequests(updatedRequests);
-      setIsDetailsModalOpen(false);
-      setMaterials([]);
-      setError('');
+    if (selectedRequest ) {      
+      // اینجا باید API مربوط به آپدیت درخواست اضافه شود
+      axiosService({
+        url: API.UPDATE_ITEMS_REQUESTS,
+        method: 'put',
+        body: {
+          requestId:selectedRequest?._id,
+          items:materials
+        }
+      })
+        .then((res: any) => {
+          setIsDetailsModalOpen(false);
+          setMaterials([]);
+          setError('');
+          getRequests();
+        })
+        .catch((err) => {
+          toast({
+            variant: 'destructive',
+            title: 'ناموفق',
+            description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
+          });
+          setLoading(false);
+        });
+       // بروزرسانی لیست درخواست‌ها
     }
   };
 
@@ -162,26 +232,19 @@ function RequestsPage() {
     switch (status) {
       case 'pending':
         return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
-      case 'processing':
+      case 'collecting':
         return 'bg-blue-50 text-blue-700 border border-blue-200';
       case 'completed':
         return 'bg-green-50 text-green-700 border border-green-200';
+      case 'cancelled':
+        return 'bg-red-50 text-red-700 border border-red-200';
       default:
         return 'bg-gray-50 text-gray-700 border border-gray-200';
     }
   };
 
   const getStatusText = (status: Request['status']) => {
-    switch (status) {
-      case 'pending':
-        return 'در انتظار';
-      case 'processing':
-        return 'در حال پردازش';
-      case 'completed':
-        return 'تکمیل شده';
-      default:
-        return status;
-    }
+    return statusOptions.find(option => option.value === status)?.label || status;
   };
 
   const formatNumber = (num: number) => {
@@ -200,65 +263,107 @@ function RequestsPage() {
               لیست درخواست‌های بازیافت
             </h1>
           </div>
+          <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm">
+            <Filter className="w-5 h-5 text-gray-500" />
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="border-0 focus:ring-0 text-sm"
+            >
+              {statusOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="grid gap-4 sm:gap-6">
-          {requests.map((request) => (
-            <div
-              key={request.id}
-              className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-4 sm:p-6 border border-gray-100"
-            >
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                <div className="space-y-3 w-full sm:w-auto">
-                  <h3 className="text-xl font-semibold text-gray-900">{request.title}</h3>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-500">تاریخ ثبت:</span>
-                    <span className="text-gray-700">{new Date(request.createdAt).toLocaleDateString('fa-IR')}</span>
-                  </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
-                    {getStatusText(request.status)}
-                  </span>
-                  <div className="flex items-start gap-2 bg-gray-50 p-3 rounded-xl">
-                    <MapPin className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-700">{request.address.title}</span>
-                      <span className="text-sm text-gray-600">{request.address.fullAddress}</span>
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600">در حال بارگذاری...</p>
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-2xl shadow-sm">
+            <p className="text-gray-500">هیچ درخواستی یافت نشد</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:gap-6">
+            {requests.map((request) => (
+              <div
+                key={request._id}
+                className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-4 sm:p-6 border border-gray-100"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                  <div className="space-y-3 w-full sm:w-auto">
+                    <h3 className="text-xl font-semibold text-gray-900">درخواست بازیافت</h3>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-500">تاریخ ثبت:</span>
+                      <span className="text-gray-700">{new Date(request.date).toLocaleDateString('fa-IR')}</span>
                     </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-500">زمان جمع‌آوری:</span>
+                      <span className="text-gray-700">{request.timeSlot.date} - {request.timeSlot.time}</span>
+                    </div>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
+                      {getStatusText(request.status)}
+                    </span>
+                    <div className="flex items-start gap-2 bg-gray-50 p-3 rounded-xl">
+                      <MapPin className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-700">{request.location.title || 'آدرس'}</span>
+                        <span className="text-sm text-gray-600">{request.location.address || 'جزئیات آدرس موجود نیست'}</span>
+                      </div>
+                    </div>
+                    {request.collector && (
+                      <div className="bg-blue-50 p-3 rounded-xl">
+                        <p className="text-sm font-medium text-blue-800">جمع‌آوری کننده:</p>
+                        <p className="text-sm text-blue-700">
+                          {request.collector.first_name} {request.collector.last_name} - {request.collector.phone}
+                        </p>
+                      </div>
+                    )}
+                    {request.description && (
+                      <div className="bg-gray-50 p-3 rounded-xl">
+                        <p className="text-sm text-gray-600">{request.description}</p>
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto justify-end">
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(request);
-                      setMaterials(request.materials);
-                      setIsDetailsModalOpen(true);
-                    }}
-                    className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
-                    title="جزئیات و جمع‌آوری"
-                  >
-                    <span className="sm:hidden">جزئیات</span>
-                    <Eye className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(request);
-                      setIsAddressModalOpen(true);
-                    }}
-                    className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
-                    title="نمایش آدرس"
-                  >
-                    <span className="sm:hidden">آدرس</span>
-                    <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                  </button>
+                  <div className="flex gap-2 w-full sm:w-auto justify-end">
+                    <button
+                      onClick={() => {
+                        setSelectedRequest(request);
+                        setMaterials(request.items);
+                        setIsDetailsModalOpen(true);
+                      }}
+                      className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
+                      title="جزئیات و جمع‌آوری"
+                    >
+                      <span className="sm:hidden">جزئیات</span>
+                      <Eye className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedRequest(request);
+                        setIsAddressModalOpen(true);
+                      }}
+                      className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
+                      title="نمایش آدرس"
+                    >
+                      <span className="sm:hidden">آدرس</span>
+                      <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Address Modal */}
         {isAddressModalOpen && selectedRequest && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm modal-overlay flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm modal-overlay flex items-center justify-center p-4 z-[1000000]">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-xl transform transition-all duration-300">
               <div className="p-6">
                 <div className="flex flex-row-reverse justify-between items-center mb-6">
@@ -272,9 +377,16 @@ function RequestsPage() {
                 </div>
                 <div className="space-y-4">
                   <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 rounded-xl">
-                    <h3 className="font-semibold text-lg text-blue-900 mb-3">{selectedRequest.address.title}</h3>
-                    <p className="text-blue-800 leading-relaxed">{selectedRequest.address.fullAddress}</p>
+                    <h3 className="font-semibold text-lg text-blue-900 mb-3">{selectedRequest.location.title || 'آدرس'}</h3>
+                    <p className="text-blue-800 leading-relaxed">{selectedRequest.location.address || 'جزئیات آدرس موجود نیست'}</p>
                   </div>
+                </div>
+                <div className="relative h-[350px] rounded-lg mb-6 overflow-hidden border-2 border-gray-200 mt-4">
+                  <MapWithNoSSR
+                    center={defaultCenter}
+                    onLocationSelect={() => { }}
+                    selectedLocation={selectedRequest.location}
+                  />
                 </div>
               </div>
             </div>
@@ -399,7 +511,7 @@ function RequestsPage() {
                   <div className="flex flex-col-reverse sm:flex-row justify-start gap-4 pt-6 border-t">
                     <button
                       onClick={handleSaveRequest}
-                      disabled={materials.length === 0}
+                      // disabled={materials.length === 0}
                       className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2"
                     >
                       ثبت درخواست
