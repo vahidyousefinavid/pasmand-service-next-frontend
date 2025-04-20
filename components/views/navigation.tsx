@@ -29,11 +29,11 @@ export function Navigation() {
                     <Button
                         variant="ghost"
                         className={`text-background hover:text-secondary-foreground ${
-                            isActive("/new-request") ? "bg-white text-black" : ""
+                            isActive("/new-requests") ? "bg-white text-black" : ""
                         }`}
                         size="icon"
                     >
-                        <Link href="/new-request">
+                        <Link href="/new-requests">
                             <Cross className="h-6 w-6" />
                         </Link>
                     </Button>
@@ -41,11 +41,11 @@ export function Navigation() {
                         variant="ghost"
                         size="icon"
                         className={`text-background hover:text-secondary-foreground ${
-                            isActive("/history") ? "bg-white text-black" : ""
+                            isActive("/requests") ? "bg-white text-black" : ""
                         }`}
                         asChild
                     >
-                        <Link href="/history">
+                        <Link href="/requests">
                             <FileClock className="h-6 w-6" />
                         </Link>
                     </Button>

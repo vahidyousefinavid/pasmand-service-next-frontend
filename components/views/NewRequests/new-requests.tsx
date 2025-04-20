@@ -6,6 +6,7 @@ import { toast } from '@/hooks/use-toast';
 import { API } from '@/services/const';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/auth-context';
+import { Button } from '@/components/ui/button';
 
 const MapWithNoSSR = dynamic(() => import('@/components/views/NewRequest/steps/map-component'), {
   ssr: false,
@@ -79,25 +80,26 @@ const units = [
 ];
 
 const statusOptions = [
-  { value: '', label: 'همه' },
+  // { value: '', label: 'همه' },
   { value: 'pending', label: 'در انتظار' },
-  { value: 'collecting', label: 'در حال جمع‌آوری' },
-  { value: 'completed', label: 'تکمیل شده' },
-  { value: 'canceled', label: 'لغو شده' }
+  // { value: 'collecting', label: 'در حال جمع‌آوری' },
+  // { value: 'completed', label: 'تکمیل شده' },
+  // { value: 'canceled', label: 'لغو شده' }
 ];
 
-function RequestsPage() {
+function NewRequestsPage() {
   const { user } = useAuth()
   const [requests, setRequests] = useState<Request[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [doLoading, setDoLoading] = useState<boolean>(false);
   const [newMaterial, setNewMaterial] = useState<any>({});
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(false);
   const [materialTypes, setMaterialTypes] = useState<Material[]>([]);
   const [error, setError] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('collecting');
+  const [selectedStatus, setSelectedStatus] = useState('pending');
   const defaultCenter = { lat: 35.6892, lng: 51.3890 }; // تهران
 
   const getData = () => {
@@ -123,15 +125,15 @@ function RequestsPage() {
   const getRequests = () => {
     setLoading(true);
     const requestBody: RequestBody = {
-      userId: user?.id // این مقدار باید از context یا store گرفته شود
+      userId: user?.id
     };
 
     if (selectedStatus) {
-      requestBody.status = selectedStatus;
+      requestBody.status = 'pending';
     }
 
     axiosService({
-      url: API.GET_REQUESTS,
+      url: API.GET_PENDING_REQUESTS,
       method: 'post',
       body: requestBody
     })
@@ -154,10 +156,10 @@ function RequestsPage() {
   }, []);
 
   useEffect(() => {
-    if(user?.id){
+    if (user?.id) {
       getRequests();
     }
-  }, [selectedStatus,user]);
+  }, [selectedStatus, user]);
 
   const handleAddMaterial = () => {
     setError('');
@@ -181,8 +183,6 @@ function RequestsPage() {
     }
   };
 
-  console.log(materials);
-  
   const handleRemoveMaterial = (id: string) => {
     setMaterials(materials.filter(m => m._id !== id));
   };
@@ -200,14 +200,14 @@ function RequestsPage() {
   };
 
   const handleSaveRequest = () => {
-    if (selectedRequest ) {      
+    if (selectedRequest) {
       // اینجا باید API مربوط به آپدیت درخواست اضافه شود
       axiosService({
         url: API.UPDATE_ITEMS_REQUESTS,
         method: 'put',
         body: {
-          requestId:selectedRequest?._id,
-          items:materials
+          requestId: selectedRequest?._id,
+          items: materials
         }
       })
         .then((res: any) => {
@@ -224,9 +224,39 @@ function RequestsPage() {
           });
           setLoading(false);
         });
-       // بروزرسانی لیست درخواست‌ها
     }
   };
+
+  const collect = (requestId: any) => {
+    setDoLoading(true)
+    axiosService({
+      url: API.UPDATE_REQUESTS,
+      method: 'put',
+      body: {
+        id: requestId,
+        collector: user?.id
+      }
+    })
+      .then((res: any) => {
+        setLoading(false)
+        toast({
+          variant: 'success',
+          title: 'موفق',
+          description: 'با موفقیت انجام شد',
+        });
+        getRequests();
+      })
+      .catch((err) => {
+        setLoading(false)
+        toast({
+          variant: 'destructive',
+          title: 'ناموفق',
+          description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
+        });
+        setLoading(false);
+      });
+    // بروزرسانی لیست درخواست‌ها
+  }
 
   const getStatusColor = (status: Request['status']) => {
     switch (status) {
@@ -260,7 +290,7 @@ function RequestsPage() {
               <Recycle className="w-7 h-7" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-              لیست درخواست‌های بازیافت
+              لیست درخواست‌های جدید
             </h1>
           </div>
           <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm">
@@ -329,9 +359,18 @@ function RequestsPage() {
                         <p className="text-sm text-gray-600">{request.description}</p>
                       </div>
                     )}
+                    {!request.collector && (
+                      <div className="w-full">
+                        <Button
+                          onClick={() => {
+                            collect(request._id)
+                          }}
+                          className='bg-secondary' size='sm'>انجام می دهم</Button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto justify-end">
-                    <button
+                    {/* <button
                       onClick={() => {
                         setSelectedRequest(request);
                         setMaterials(request.items);
@@ -342,7 +381,7 @@ function RequestsPage() {
                     >
                       <span className="sm:hidden">جزئیات</span>
                       <Eye className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                    </button>
+                    </button> */}
                     <button
                       onClick={() => {
                         setSelectedRequest(request);
@@ -536,4 +575,4 @@ function RequestsPage() {
   );
 }
 
-export default RequestsPage;
+export default NewRequestsPage;

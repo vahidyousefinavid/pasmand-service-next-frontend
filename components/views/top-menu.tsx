@@ -18,21 +18,21 @@ export function TopMenu() {
             href: '/'
         },
         {
-            title: 'ثبت درخواست جدید',
-            href: '/new-request'
+            title: 'درخواست های جدید',
+            href: '/new-requests'
         },
         {
-            title: 'سوابق فروش',
-            href: '/history'
+            title: 'درخواست های من',
+            href: '/requests'
         },
         {
             title: 'تعرفه قیمت‌ها',
             href: '/tariff'
         },
         {
-            title: 'آدرس های ثبت شده',
-            href: '/addresses'
-        }
+            title: 'راهنما',
+            href: '/guide'
+        },
     ];
 
     return (

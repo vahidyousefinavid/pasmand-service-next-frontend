@@ -2,6 +2,8 @@ export const API = {
     SIGN_UP: "/api/serviceProvider/login",
     GET_MATERIAL: "api/recyclableMaterials",
     GET_REQUESTS: "api/serviceProvider/getRequests",
+    UPDATE_REQUESTS:"api/request/update",
+    GET_PENDING_REQUESTS: "api/serviceProvider/getPendingRequests",
     UPDATE_ITEMS_REQUESTS: "api/request/updateItemsRequest",
     NEW_REQUEST: "api/v1/new-request",
     USER_REQUESTS: "api/v1/user-requests",
