@@ -3,6 +3,7 @@ export const API = {
     GET_MATERIAL: "api/recyclableMaterials",
     GET_REQUESTS: "api/serviceProvider/getRequests",
     UPDATE_REQUESTS:"api/request/update",
+    COLLECT_REQUESTS:"api/request/collect",
     GET_PENDING_REQUESTS: "api/serviceProvider/getPendingRequests",
     UPDATE_ITEMS_REQUESTS: "api/request/updateItemsRequest",
     NEW_REQUEST: "api/v1/new-request",

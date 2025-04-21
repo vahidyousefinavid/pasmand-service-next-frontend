@@ -230,7 +230,7 @@ function NewRequestsPage() {
   const collect = (requestId: any) => {
     setDoLoading(true)
     axiosService({
-      url: API.UPDATE_REQUESTS,
+      url: API.COLLECT_REQUESTS,
       method: 'put',
       body: {
         id: requestId,
