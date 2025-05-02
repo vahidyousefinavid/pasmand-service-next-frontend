@@ -7,7 +7,7 @@ import { API } from '@/services/const';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/auth-context';
 
-const MapWithNoSSR = dynamic(() => import('@/components/views/NewRequest/steps/map-component'), {
+const MapWithNoSSR = dynamic(() => import('@/components/views/Components/map'), {
   ssr: false,
   loading: () => (
     <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
@@ -154,10 +154,10 @@ function RequestsPage() {
   }, []);
 
   useEffect(() => {
-    if(user?.id){
+    if (user?.id) {
       getRequests();
     }
-  }, [selectedStatus,user]);
+  }, [selectedStatus, user]);
 
   const handleAddMaterial = () => {
     setError('');
@@ -182,7 +182,7 @@ function RequestsPage() {
   };
 
   console.log(materials);
-  
+
   const handleRemoveMaterial = (id: string) => {
     setMaterials(materials.filter(m => m._id !== id));
   };
@@ -200,14 +200,14 @@ function RequestsPage() {
   };
 
   const handleSaveRequest = () => {
-    if (selectedRequest ) {      
+    if (selectedRequest) {
       // اینجا باید API مربوط به آپدیت درخواست اضافه شود
       axiosService({
         url: API.UPDATE_ITEMS_REQUESTS,
         method: 'put',
         body: {
-          requestId:selectedRequest?._id,
-          items:materials
+          requestId: selectedRequest?._id,
+          items: materials
         }
       })
         .then((res: any) => {
@@ -224,7 +224,7 @@ function RequestsPage() {
           });
           setLoading(false);
         });
-       // بروزرسانی لیست درخواست‌ها
+      // بروزرسانی لیست درخواست‌ها
     }
   };
 
@@ -383,7 +383,7 @@ function RequestsPage() {
                 </div>
                 <div className="relative h-[350px] rounded-lg mb-6 overflow-hidden border-2 border-gray-200 mt-4">
                   <MapWithNoSSR
-                    center={defaultCenter}
+                    center={selectedRequest.location || { lat: 35.6892, lng: 51.3890 }}
                     onLocationSelect={() => { }}
                     selectedLocation={selectedRequest.location}
                   />

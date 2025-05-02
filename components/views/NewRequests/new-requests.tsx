@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 
-const MapWithNoSSR = dynamic(() => import('@/components/views/NewRequest/steps/map-component'), {
+const MapWithNoSSR = dynamic(() => import('@/components/views/Components/map'), {
   ssr: false,
   loading: () => (
     <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
@@ -421,8 +421,8 @@ function NewRequestsPage() {
                   </div>
                 </div>
                 <div className="relative h-[350px] rounded-lg mb-6 overflow-hidden border-2 border-gray-200 mt-4">
-                  <MapWithNoSSR
-                    center={defaultCenter}
+                <MapWithNoSSR
+                    center={selectedRequest.location || { lat: 35.6892, lng: 51.3890 }}
                     onLocationSelect={() => { }}
                     selectedLocation={selectedRequest.location}
                   />
