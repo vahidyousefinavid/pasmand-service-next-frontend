@@ -1,12 +1,21 @@
 'use client';
 
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider, useTheme } from 'next-themes';
+import { useEffect } from 'react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    if (theme !== 'light') {
+      setTheme('light');
+    }
+  }, [theme, setTheme]);
+
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="light"
       enableSystem
       themes={['light', 'dark', 'modern', 'classic']}
     >
