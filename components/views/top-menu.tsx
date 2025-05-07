@@ -58,7 +58,7 @@ export function TopMenu() {
                             </SheetContent>
                         </Sheet>
                     </div>
-                    <h1 className="text-xl text-white font-bold">برنامه شهروند</h1>
+                    <h1 className="text-xl text-white font-bold">برنامه خدمات شهر</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     {isAuthenticated ? (

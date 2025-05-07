@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
     return {
         name: "شهروند",
         short_name: "شهروند",
-        description: "برنامه شهروند",
+        description: "برنامه خدمات شهر",
         start_url: "/",
         display: "standalone",
         orientation: "portrait",
