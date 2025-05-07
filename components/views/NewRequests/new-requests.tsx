@@ -1,6 +1,6 @@
 "use client"
 import React, { useEffect, useState } from 'react';
-import { MapPin, Eye, Plus, X, Trash, Scale, Recycle, Filter } from 'lucide-react';
+import { MapPin, Eye, Plus, X, Trash, Scale, Recycle, Filter, Phone, PhoneCall } from 'lucide-react';
 import { axiosService } from '@/lib/axiosService';
 import { toast } from '@/hooks/use-toast';
 import { API } from '@/services/const';
@@ -248,10 +248,12 @@ function NewRequestsPage() {
       })
       .catch((err) => {
         setLoading(false)
+        console.log(err);
+        
         toast({
           variant: 'destructive',
           title: 'ناموفق',
-          description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
+          description: err?.data?.message || 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
         });
         setLoading(false);
       });
@@ -335,6 +337,17 @@ function NewRequestsPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-500">زمان جمع‌آوری:</span>
                       <span className="text-gray-700">{request.timeSlot.date} - {request.timeSlot.time}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-500">شماره تماس:</span>
+                      <a
+                        href={`tel:${request.user.phone}`}
+                        className="flex items-center gap-2 px-2 py-1 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200 shadow-sm group"
+                        title="برای تماس کلیک کنید"
+                      >
+                        <PhoneCall className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform duration-200" />
+                        <span className="text-green-700 underline group-hover:text-green-900 font-medium">{request.user.phone}</span>
+                      </a>
                     </div>
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
                       {getStatusText(request.status)}
@@ -421,7 +434,7 @@ function NewRequestsPage() {
                   </div>
                 </div>
                 <div className="relative h-[350px] rounded-lg mb-6 overflow-hidden border-2 border-gray-200 mt-4">
-                <MapWithNoSSR
+                  <MapWithNoSSR
                     center={selectedRequest.location || { lat: 35.6892, lng: 51.3890 }}
                     onLocationSelect={() => { }}
                     selectedLocation={selectedRequest.location}
