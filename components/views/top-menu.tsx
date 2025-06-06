@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "../ui/button";
 import InstallButton from "./InstallButton";
+import NotificationRequest from "../notification";
 
 export function TopMenu() {
     const [open, setOpen] = useState(false);
@@ -73,6 +74,7 @@ export function TopMenu() {
                             </Button>
                         </Link>
                     )}
+                    <NotificationRequest/>
                 </div>
             </div>
         </div>

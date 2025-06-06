@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Providers } from './providers';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/context/auth-context';
+import QueryProvider from '@/components/query-provider';
 
 // const defaultUrl = process.env.VERCEL_URL
 //   ? `https://${process.env.VERCEL_URL}`
@@ -61,10 +62,12 @@ export default function RootLayout({
     <html lang="fa" dir="rtl" suppressHydrationWarning>
       <body>
         <AuthProvider>
-          <Providers>
-            {children}
-            <Toaster />
-          </Providers>
+          <QueryProvider>
+            <Providers>
+              {children}
+              <Toaster />
+            </Providers>
+            </QueryProvider>
         </AuthProvider>
       </body>
     </html>
