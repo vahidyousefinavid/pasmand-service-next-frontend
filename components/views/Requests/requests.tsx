@@ -56,6 +56,7 @@ interface Request {
   totalPrice: number;
   user: User;
   collector?: User;
+  paymentMethod?: string
 }
 
 interface RequestBody {
@@ -98,6 +99,7 @@ function RequestsPage() {
   const [materialTypes, setMaterialTypes] = useState<Material[]>([]);
   const [error, setError] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('collecting');
+  const [paymentMethod, setPaymentMethod] = useState<any>('wallet')
   const defaultCenter = { lat: 35.6892, lng: 51.3890 }; // تهران
 
   const getData = () => {
@@ -207,7 +209,8 @@ function RequestsPage() {
         method: 'put',
         body: {
           requestId: selectedRequest?._id,
-          items: materials
+          items: materials,
+          paymentMethod: paymentMethod
         }
       })
         .then((res: any) => {
@@ -345,6 +348,7 @@ function RequestsPage() {
                     <button
                       onClick={() => {
                         setSelectedRequest(request);
+                        setPaymentMethod(request.paymentMethod)
                         setMaterials(request.items);
                         setIsDetailsModalOpen(true);
                       }}
@@ -357,6 +361,7 @@ function RequestsPage() {
                     <button
                       onClick={() => {
                         setSelectedRequest(request);
+                        setPaymentMethod(request.paymentMethod)
                         setIsAddressModalOpen(true);
                       }}
                       className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
@@ -517,6 +522,29 @@ function RequestsPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+                  <div className='flex gap-4 justify-center items-center'>
+                    <div>
+                      نوع پرداخت:
+                    </div>
+                    <button
+                      onClick={() => {
+                        setPaymentMethod('wallet')
+                      }}
+                      // disabled={materials.length === 0}
+                      className={`w-full ${paymentMethod == 'wallet' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} sm:w-auto px-6 py-2.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2`}
+                    >
+                      پرداخت در کیف پول
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPaymentMethod('cash')
+                      }}
+                      // disabled={materials.length === 0}
+                      className={`w-full ${paymentMethod == 'cash' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} sm:w-auto px-6 py-2.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2`}
+                    >
+                      پرداخت نقدی
+                    </button>
                   </div>
 
                   <div className="flex flex-col-reverse sm:flex-row justify-start gap-4 pt-6 border-t">
