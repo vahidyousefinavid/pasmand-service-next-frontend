@@ -60,7 +60,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fa" dir="rtl" suppressHydrationWarning>
-      <body>
+      <head>
+        {/* The two faces the first screen paints in, fetched alongside the CSS
+            rather than after it. Same self-hosted IRANSans as the citizen app. */}
+        <link rel="preload" href="/fonts/iransans/IRANSansWeb.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/iransans/IRANSansWeb_Bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
+      <body className="font-sans">
         <AuthProvider>
           <QueryProvider>
             <Providers>

@@ -218,3 +218,444 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* ── Shared design layer, identical to the citizen app ──────────────────── */
+/* ── Type ──
+   IRANSans, served from this origin — the same web build the admin panel of
+   this very product uses (pasmand-panel-react-frontend/public/fonts/woff2), so
+   the citizen app and the panel are now set in one typeface.
+
+   Nothing is fetched from fonts.googleapis.com or a CDN. An import costs a DNS
+   lookup, a TLS handshake and a CSS round trip to a third party before a single
+   glyph can be requested — the slowest part of first paint on an Iranian mobile
+   connection — and those hosts are reachable from Iran only unreliably, so when
+   one stalls the page renders in a fallback with no Persian design at all.
+
+   Three weights, ~88 KB total, which is every weight the interface asks for:
+   400 for body, 500 for secondary labels, and one bold face declared across
+   600–900 so the 700s and 800s in the design resolve to a *real* bold instead
+   of a synthetic one smeared on by the browser. */
+@font-face {
+  font-family: 'IRANSans';
+  src: url('/fonts/iransans/IRANSansWeb.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  /* swap, not block: Persian text in a fallback for 100 ms beats no text. */
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSans';
+  src: url('/fonts/iransans/IRANSansWeb_Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IRANSans';
+  src: url('/fonts/iransans/IRANSansWeb_Bold.woff2') format('woff2');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 156.49 100% 19.02%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --success: 156.49 100% 19.02%;
+    --success-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --success: 217.2 32.6% 17.5%;
+    --success-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%; */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 156.49 100% 19.02%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --success: 156.49 100% 19.02%;
+    --success-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+  }
+}
+
+.loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.loader span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #3498db; /* رنگ اصلی */
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+.loader span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loader span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.loader span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* font-family: 'Vazir', sans-serif; */
+  }
+}
+
+/* RTL Support */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom Swiper Styles */
+.swiper-pagination-bullet {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  opacity: 0 !important;
+  transition: all 0.3s ease !important;
+}
+
+.swiper-pagination-bullet-active {
+  background-color: white !important;
+  transform: scale(1.2) !important;
+}
+
+.swiper-button-next::after,
+.swiper-button-prev::after {
+  display: none !important;
+}
+
+/* Fade effect for swiper */
+.swiper-fade .swiper-slide {
+  transition-property: opacity;
+  transition-duration: 0.5s !important;
+}
+
+/* Creative effect for swiper */
+.swiper-creative .swiper-slide {
+  transition-duration: 0.8s !important;
+}
+
+/* Custom animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.drawer {
+  will-change: transform;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens for the redesigned screens (home, waste types, new request,
+   history). Referenced from components/ui/tokens.ts as `var(--pm-*)`, never
+   read directly from a component, so a palette change is a change here only.
+
+   Light is the base because the rest of the app is light; the dark block is
+   opt-in via `html[data-theme="dark"]` and touches nothing else.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --pm-green:      #12805c;
+  --pm-green-dark: #0b5f44;
+  --pm-green-soft: #35b98a;
+  --pm-amber:      #c2790b;
+  --pm-red:        #d33b3b;
+  --pm-blue:       #2563eb;
+  --pm-violet:     #7c4dcc;
+
+  --pm-bg:         #f4f7f5;
+  --pm-bg-subtle:  #eef2ef;
+  --pm-surface:    #ffffff;
+  --pm-surface-2:  #f7faf8;
+
+  --pm-hero-start: #0f6f52;
+  --pm-hero-end:   #17a06e;
+  --pm-on-hero:       #ffffff;
+  --pm-on-hero-muted: rgba(255, 255, 255, 0.78);
+
+  --pm-text-strong: #10231c;
+  --pm-text:        #1d3a30;
+  --pm-muted:       #5b7168;
+  --pm-subtle:      #8798918f;
+  --pm-on-accent:   #ffffff;
+
+  --pm-border:        #e2e9e5;
+  --pm-border-strong: #cfdad4;
+
+  --pm-shadow-card:  0 1px 2px rgba(16, 35, 28, 0.04), 0 8px 24px rgba(16, 35, 28, 0.06);
+  --pm-shadow-lift:  0 2px 6px rgba(16, 35, 28, 0.06), 0 18px 44px rgba(16, 35, 28, 0.12);
+  --pm-shadow-hero:  0 18px 42px rgba(15, 111, 82, 0.28);
+  --pm-shadow-sheet: 0 -8px 40px rgba(16, 35, 28, 0.18);
+
+  --pm-status-ok:      #12805c;
+  --pm-status-warn:    #c2790b;
+  --pm-status-info:    #2563eb;
+  --pm-status-danger:  #d33b3b;
+  --pm-status-neutral: #6b7f77;
+
+  --pm-waste-household:    #64748b;
+  --pm-waste-recyclable:   #12805c;
+  --pm-waste-electronic:   #7c4dcc;
+  --pm-waste-bulky:        #c2790b;
+  --pm-waste-automotive:   #2563eb;
+  --pm-waste-construction: #b4530f;
+}
+
+html[data-theme='dark'] {
+  --pm-bg:         #0d1512;
+  --pm-bg-subtle:  #101b17;
+  --pm-surface:    #14201b;
+  --pm-surface-2:  #182721;
+
+  --pm-green:      #35b98a;
+  --pm-green-dark: #12805c;
+  --pm-green-soft: #5fd3a9;
+
+  --pm-text-strong: #f2f7f4;
+  --pm-text:        #dce8e2;
+  --pm-muted:       #93a89f;
+  --pm-subtle:      #6f847c;
+
+  --pm-border:        #22332c;
+  --pm-border-strong: #2e4239;
+
+  --pm-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --pm-shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.45), 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+/* The fonts this project bundled were declared in layout.tsx but never applied
+   to anything, so every screen rendered in whatever the device happened to have.
+   Tailwind's `font-sans` now resolves to IRANSans (see tailwind.config.ts);
+   this rule covers anything outside a Tailwind class. */
+body {
+  font-family: 'IRANSans', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Native controls do not inherit the page font on their own. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* One input style for every field in the redesigned screens — including the
+   Jalali date picker, which takes it via `inputClass`. It lives here rather
+   than in a route-level stylesheet because the same class is used on pages that
+   never import the wizard. */
+.pm-field,
+.pm-date-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1.5px solid var(--pm-border);
+  background: var(--pm-surface-2);
+  color: var(--pm-text-strong);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: start;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pm-field::placeholder,
+.pm-date-input::placeholder {
+  color: var(--pm-muted);
+  font-weight: 500;
+}
+
+.pm-field:focus,
+.pm-date-input:focus {
+  border-color: var(--pm-green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pm-green) 16%, transparent);
+}
+
+.pm-field:disabled {
+  opacity: 0.6;
+}
+
+textarea.pm-field {
+  min-height: 110px;
+  padding: 12px 14px;
+  line-height: 1.9;
+  resize: vertical;
+}
+
+/* Digits read as numbers, not as text that happens to be numeric. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+@keyframes pmFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The dotted rail that threads the service timeline. Animating the offset
+   makes the dashes travel, which is what turns a divider into a route. */
+@keyframes pmDashFlow {
+  to { background-position-y: 18px; }
+}
+
+@keyframes pmPulseDot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.5); opacity: 0.45; }
+}
+
+@keyframes pmSweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(240%); }
+}
+
+.pm-fade-up { animation: pmFadeUp 0.32s ease both; }
+
+/* Horizontal strips (chips, filters) scroll inside themselves; the page never
+   scrolls sideways on a phone. */
+.pm-scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.pm-scroll-x::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-fade-up { animation: none; }
+}

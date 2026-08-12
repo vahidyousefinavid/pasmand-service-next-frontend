@@ -1,175 +1,172 @@
 'use client';
 
-import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
-    Cross,
-    Banknote,
-    FileClock,
-    MapPinned,
-    HelpCircle,
-    ChevronLeft,
-    ChevronRight,
-    Leaf,
-    Gift,
-    Recycle,
-    ArrowUpRight
+  Inbox, ClipboardList, Banknote, HelpCircle, User, Truck, ChevronLeft, Sparkles,
 } from 'lucide-react';
 import { Navigation } from '@/components/views/navigation';
 import { TopMenu } from '@/components/views/top-menu';
-import Link from 'next/link';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay, Pagination, Navigation as SwiperNavigation, EffectFade, EffectCreative } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/pagination';
-import 'swiper/css/navigation';
-import 'swiper/css/effect-fade';
-import 'swiper/css/effect-creative';
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { C, S, alpha } from '@/components/ui/tokens';
+import { Screen, Hero, Card, IconBadge, SectionTitle } from '@/components/ui/kit';
 
-const items = [
-    {
-        icon: <MapPinned className="h-7 w-7" />,
-        title: 'درخواست های من',
-        description: 'درخواست های من',
-        color: 'text-[hsl(25,84%,48%)]',
-        bgColor: 'bg-[hsl(25,84%,48%)]/10',
-        href: 'requests'
-    },
-    {
-        icon: <Cross className="h-7 w-7" />,
-        title: 'درخواست های جدید',
-        description: 'درخواست جمع آوری جهت تصفیه و کمک به محیط زیست',
-        color: 'text-[hsl(25,84%,48%)]',
-        bgColor: 'bg-[hsl(25,84%,48%)]/10',
-        href: '/new-requests'
-    },
-    {
-        icon: <Banknote className="h-7 w-7" />,
-        title: 'تعرفه قیمت‌ها',
-        description: 'قیمت روز تمامی اقلام',
-        color: 'text-[hsl(25,84%,48%)]',
-        bgColor: 'bg-[hsl(25,84%,48%)]/10',
-        href: 'tariff'
-    },
-    // {
-    //     icon: <FileClock className="h-7 w-7" />,
-    //     title: 'سوابق جمع آوری',
-    //     description: ' لیست سوابق درخواست های شما',
-    //     color: 'text-[hsl(25,84%,48%)]',
-    //     bgColor: 'bg-[hsl(25,84%,48%)]/10',
-    //     href: 'history'
-    // },
-    {
-        icon: <HelpCircle className="h-7 w-7" />,
-        title: 'راهنمای استفاده',
-        description: 'آموزش استفاده از اپلیکیشن',
-        color: 'text-[hsl(25,84%,48%)]',
-        bgColor: 'bg-[hsl(25,84%,48%)]/10',
-        href: 'guide'
-    },
+/**
+ * The collector's home — the citizen app's home seen from the other side of the
+ * same job, and built from the same kit so the two apps are recognisably one
+ * product.
+ *
+ * The services sit on a dotted rail for the same reason they do there: what a
+ * collector does here is a route, not a menu — pick up new work, carry it,
+ * settle it.
+ */
+
+const services = [
+  {
+    href: '/new-requests',
+    title: 'درخواست‌های جدید',
+    description: 'کارهای آزاد شهر را ببینید و بردارید',
+    icon: <Inbox className="h-5 w-5" />,
+    color: C.green,
+    primary: true,
+  },
+  {
+    href: '/requests',
+    title: 'کارهای من',
+    description: 'درخواست‌هایی که پذیرفته‌اید و باید جمع‌آوری شوند',
+    icon: <ClipboardList className="h-5 w-5" />,
+    color: C.statusInfo,
+  },
+  {
+    href: '/tariff',
+    title: 'تعرفهٔ قیمت‌ها',
+    description: 'قیمت روز خرید هر قلم، برای توزین در محل',
+    icon: <Banknote className="h-5 w-5" />,
+    color: C.amber,
+  },
+  {
+    href: '/guide',
+    title: 'راهنمای جمع‌آوری',
+    description: 'از پذیرش کار تا توزین و تحویل',
+    icon: <HelpCircle className="h-5 w-5" />,
+    color: C.statusNeutral,
+  },
+  {
+    href: '/profile',
+    title: 'پروفایل',
+    description: 'اطلاعات شما و خدماتی که پوشش می‌دهید',
+    icon: <User className="h-5 w-5" />,
+    color: C.violet,
+  },
 ];
-
-const banners = [
-    {
-        title: 'تخفیف ویژه برای جمع آوری بیش از ۵ کیلوگرم!',
-        description: 'با جمع آوری بیشتر، به محیط زیست کمک کنید و از تخفیف های ویژه بهره مند شوید.',
-        bgColor: 'from-[hsl(25,84%,48%)] to-[hsl(25,84%,58%)]',
-        textColor: 'text-white',
-        icon: <Recycle className="h-8 w-8 mb-0" />,
-        buttonText: 'درخواست جمع‌آوری',
-        buttonLink: '/new-request',
-        image: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?q=80&w=1470&auto=format&fit=crop'
-    },
-    {
-        title: 'همراه با ما در حفظ محیط زیست سهیم باشید',
-        description: 'با تفکیک زباله‌ها و بازیافت آنها، به حفظ منابع طبیعی کمک کنید.',
-        bgColor: 'from-emerald-600 to-emerald-500',
-        textColor: 'text-white',
-        icon: <Leaf className="h-8 w-8 mb-0" />,
-        buttonText: 'مشاهده راهنما',
-        buttonLink: '/guide',
-        image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=1474&auto=format&fit=crop'
-    },
-    {
-        title: 'جایزه ویژه برای کاربران فعال',
-        description: 'با ثبت بیش از ۵ درخواست در ماه، شانس خود را برای دریافت جوایز نقدی امتحان کنید.',
-        bgColor: 'from-blue-600 to-blue-500',
-        textColor: 'text-white',
-        icon: <Gift className="h-8 w-8 mb-0" />,
-        buttonText: 'شرایط دریافت جایزه',
-        buttonLink: '/guide',
-        image: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab0?q=80&w=1470&auto=format&fit=crop'
-    }
-];
-
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1
-        }
-    }
-};
-
-const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-        y: 0,
-        opacity: 1,
-        transition: {
-            type: "spring",
-            stiffness: 100
-        }
-    }
-};
 
 export default function HomeView() {
-    const [mounted, setMounted] = useState(false);
-    const [activeIndex, setActiveIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+  useEffect(() => setMounted(true), []);
 
-    return (
-        <div className="min-h-screen bg-background">
-            <TopMenu />
-            <div className="pt-[120px] px-[20px]">
-                <motion.div
-                    dir="rtl"
-                    className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pb-20"
-                    variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
-                >
-                    {items.map((item, index) => (
-                        <motion.div key={index} variants={itemVariants}>
-                            <Link href={item?.href}>
-                                <Card
-                                    className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border-none cursor-pointer rounded-xl group"
-                                >
-                                    <CardContent className="p-6">
-                                        <div className="flex justify-start items-center space-x-4">
-                                            <div className="space-y-2 flex-1">
-                                                <h3 className="font-medium text-lg leading-none group-hover:text-[hsl(25,84%,48%)] transition-colors duration-300">{item.title}</h3>
-                                                <p className="text-sm text-muted-foreground">{item.description}</p>
-                                            </div>
-                                            <div className={`p-3 rounded-xl ${item.bgColor} ${item.color} group-hover:scale-110 transition-transform duration-300`}>
-                                                {item.icon}
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </Link>
-                        </motion.div>
-                    ))}
-                </motion.div>
-            </div>
-            {/* </ScrollArea> */}
-            <Navigation />
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // A PWA that cannot register its worker is still a working app.
+      });
+    }
+  }, []);
+
+  if (!mounted) return null;
+
+  return (
+    <>
+      <TopMenu />
+      <Screen>
+        <Hero
+          icon={<Truck className="h-6 w-6" />}
+          title="برنامهٔ جمع‌آور"
+          sub="کارهای آزاد شهر را بردارید، در محل توزین کنید و تحویل بگیرید."
+          aside={
+            <Link href="/new-requests" style={{ textDecoration: 'none' }}>
+              <span
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: S.s2,
+                  background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.3)',
+                  color: C.onHero, padding: '12px 18px', borderRadius: S.rPill,
+                  fontSize: S.sm, fontWeight: 800, whiteSpace: 'nowrap',
+                }}
+              >
+                <Inbox className="h-4 w-4" />
+                درخواست‌های جدید
+              </span>
+            </Link>
+          }
+        />
+
+        <SectionTitle
+          title="خدمات"
+          action={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: S.xs, color: C.muted, fontWeight: 600 }}>
+              <Sparkles className="h-3.5 w-3.5" />
+              مسیر یک جمع‌آوری
+            </span>
+          }
+        />
+
+        <div style={{ position: 'relative', paddingInlineStart: 34 }}>
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute', insetInlineStart: 14, top: 26, bottom: 26, width: 2,
+              backgroundImage: `linear-gradient(to bottom, ${alpha(C.green, 55)} 55%, transparent 0)`,
+              backgroundSize: '2px 10px',
+              backgroundRepeat: 'repeat-y',
+              maskImage: 'linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%)',
+              animation: 'pmDashFlow 1.6s linear infinite',
+            }}
+          />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: S.s3 }}>
+            {services.map((s, i) => (
+              <div key={s.href} className="pm-fade-up" style={{ position: 'relative', animationDelay: `${i * 45}ms` }}>
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute', insetInlineStart: -26, top: 26,
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: C.bg, border: `2.5px solid ${s.color}`,
+                    boxShadow: s.primary ? `0 0 0 5px ${alpha(s.color, 14)}` : undefined,
+                  }}
+                />
+
+                <Link href={s.href} style={{ textDecoration: 'none', display: 'block' }}>
+                  <Card accent={s.primary ? s.color : undefined} interactive>
+                    <div style={{ padding: `${S.s4}px`, display: 'flex', alignItems: 'center', gap: S.s3 }}>
+                      <IconBadge color={s.color}>{s.icon}</IconBadge>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>{s.title}</p>
+                        <p style={{ margin: '5px 0 0', fontSize: S.xs, color: C.muted, lineHeight: 1.75 }}>{s.description}</p>
+                      </div>
+                      <ChevronLeft className="h-4 w-4" style={{ color: C.subtle, flexShrink: 0 }} />
+                    </div>
+                  </Card>
+                </Link>
+              </div>
+            ))}
+          </div>
         </div>
-    );
+
+        <Link
+          href="/new-requests"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: S.s2,
+            marginTop: S.s6, padding: '14px 20px', borderRadius: S.r2,
+            background: C.green, color: C.onAccent, textDecoration: 'none',
+            fontSize: S.base, fontWeight: 800, boxShadow: `0 8px 20px ${alpha(C.green, 28)}`,
+          }}
+        >
+          <Inbox className="h-4 w-4" />
+          دیدن درخواست‌های جدید
+        </Link>
+      </Screen>
+      <Navigation />
+    </>
+  );
 }

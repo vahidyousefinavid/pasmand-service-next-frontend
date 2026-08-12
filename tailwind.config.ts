@@ -9,6 +9,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // Same face as the citizen app, self-hosted from /public/fonts.
+      fontFamily: {
+        sans: ['IRANSans', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic':
