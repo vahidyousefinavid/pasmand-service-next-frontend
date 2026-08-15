@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   CircleUser, MenuIcon, LogIn, Truck, ChevronLeft, X,
-  Inbox, ClipboardList, Banknote, HelpCircle, User, FileClock,
+  Inbox, ClipboardList, Banknote, HelpCircle, User, FileClock, MessagesSquare, Bell,
   type LucideIcon,
 } from 'lucide-react';
 
 import { useAuth } from '@/context/auth-context';
 import InstallButton from './InstallButton';
 import { C, S, alpha } from '@/components/ui/tokens';
+import NotificationCenter from '@/components/notification-center';
+import MessagesBell from '@/components/messages-bell';
 
 /**
  * The collector's header — the citizen app's header without the city picker,
@@ -24,6 +26,8 @@ const MENU_GROUPS: { label: string; items: { title: string; sub: string; href: s
       { title: 'درخواست‌های جدید', sub: 'کارهای آزاد شهر', href: '/new-requests', Icon: Inbox, color: C.green },
       { title: 'کارهای من', sub: 'پذیرفته‌شده و در جریان', href: '/requests', Icon: ClipboardList, color: C.statusInfo },
       { title: 'سوابق', sub: 'جمع‌آوری‌های انجام‌شده', href: '/history', Icon: FileClock, color: C.amber },
+      { title: 'پیام‌ها', sub: 'گفتگو با شهروندان', href: '/messages', Icon: MessagesSquare, color: C.statusInfo },
+      { title: 'اعلان‌ها', sub: 'هر خبری که برای شما آمده', href: '/notifications', Icon: Bell, color: C.violet },
     ],
   },
   {
@@ -69,10 +73,16 @@ export function TopMenu() {
 
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: S.sm, fontWeight: 800 }}>
             <Truck className="h-4 w-4" />
-            جمع‌آور
+            شهر شهر · جمع‌آور
           </span>
 
           <span style={{ flex: 1 }} />
+
+          {/* Two different things, two controls: what happened (the bell)
+              and what a citizen is waiting for an answer to. */}
+          <MessagesBell />
+
+          <NotificationCenter />
 
           {isAuthenticated ? (
             <Link href="/profile" aria-label="پروفایل" style={{ color: C.onHero, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -103,8 +113,14 @@ export function TopMenu() {
           />
           <aside
             dir="rtl"
+            className="pm-drawer-in"
             style={{
-              position: 'fixed', insetBlock: 0, insetInlineEnd: 0, zIndex: 100001,
+              // `right`, not `insetInlineEnd`. Inside dir="rtl" the inline *end*
+              // is the physical LEFT, so the logical property put the drawer on
+              // the wrong side of the screen — away from the burger that opens
+              // it and from the thumb of a right-handed phone user. The citizen
+              // app anchors its sheet physically right; this now matches.
+              position: 'fixed', top: 0, bottom: 0, right: 0, zIndex: 100001,
               width: 'min(86vw, 360px)', background: C.bg, color: C.text,
               display: 'flex', flexDirection: 'column', overflowY: 'auto',
               boxShadow: C.shadowSheet,
@@ -123,7 +139,9 @@ export function TopMenu() {
                 onClick={() => setOpen(false)}
                 aria-label="بستن"
                 style={{
-                  position: 'absolute', top: `calc(${S.s4}px + env(safe-area-inset-top))`, insetInlineStart: S.s4,
+                  // Physical left: the far edge from the panel's right anchor,
+                  // so closing never sits under the hand that just opened it.
+                  position: 'absolute', top: `calc(${S.s4}px + env(safe-area-inset-top))`, left: S.s4,
                   background: 'transparent', border: 'none', color: C.onHero, cursor: 'pointer',
                 }}
               >
@@ -140,7 +158,7 @@ export function TopMenu() {
                   <Truck className="h-5 w-5" />
                 </span>
                 <div>
-                  <p style={{ margin: 0, fontSize: S.md, fontWeight: 800 }}>برنامهٔ جمع‌آور</p>
+                  <p style={{ margin: 0, fontSize: S.md, fontWeight: 800 }}>شهر شهر · برنامهٔ جمع‌آور</p>
                   <p style={{ margin: '4px 0 0', fontSize: S.xs, color: C.onHeroMuted }}>
                     {isAuthenticated ? 'حساب شما فعال است' : 'برای دیدن کارها وارد شوید'}
                   </p>

@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;200;300;400;500;600;700;800;900&display=swap');
+/* Vazirmatn used to be pulled from fonts.googleapis.com here — nine weights, an
+   extra DNS lookup and TLS handshake before the first glyph, from a host that
+   is unreliable from Iran. It also registered 27 faces the design never asked
+   for and set the body font to a family nothing had downloaded. The bundled
+   IRANSans below is the citizen app's face, byte for byte. */
 
 @tailwind base;
 @tailwind components;
@@ -120,7 +124,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'IRANSans', ui-sans-serif, system-ui, sans-serif;
   }
 }
 
@@ -656,6 +660,19 @@ textarea.pm-field {
 }
 .pm-scroll-x::-webkit-scrollbar { display: none; }
 
+
+/* The drawer slides in from the right edge it is anchored to, rather than
+   appearing. `both` leaves a transform behind, so nothing with `position:
+   fixed` may live inside this element — the transform would become its
+   containing block and trap it. The drawer holds only links. */
+@keyframes pmDrawerIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.pm-drawer-in { animation: pmDrawerIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .pm-fade-up { animation: none; }
+  .pm-drawer-in { animation: none; }
 }

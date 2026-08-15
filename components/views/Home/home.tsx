@@ -64,14 +64,6 @@ export default function HomeView() {
 
   useEffect(() => setMounted(true), []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {
-        // A PWA that cannot register its worker is still a working app.
-      });
-    }
-  }, []);
-
   if (!mounted) return null;
 
   return (

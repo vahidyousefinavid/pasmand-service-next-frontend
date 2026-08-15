@@ -2,7 +2,7 @@ import LoginPage from "@/components/views/Login/login";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'ورود و ثبت نام',
+  title: 'ورود جمع‌آور',
   description: ''
 }
 

@@ -4,15 +4,16 @@ import { Providers } from './providers';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/context/auth-context';
 import QueryProvider from '@/components/query-provider';
+import PushRegister from '@/components/push-register';
 
 // const defaultUrl = process.env.VERCEL_URL
 //   ? `https://${process.env.VERCEL_URL}`
 //   : "http://localhost:3000"
 
-const APP_NAME = "برنامه خدمات شهر";
-const APP_DEFAULT_TITLE = "برنامه خدمات شهر";
-const APP_TITLE_TEMPLATE = "برنامه خدمات شهر";
-const APP_DESCRIPTION = "برنامه خدمات شهر";
+const APP_NAME = "شهر شهر | جمع‌آوران";
+const APP_DEFAULT_TITLE = "شهر شهر — برنامهٔ جمع‌آوران";
+const APP_TITLE_TEMPLATE = "%s | شهر شهر";
+const APP_DESCRIPTION = "برنامهٔ خدمات‌دهندگان سامانهٔ خدمات شهری شهر شهر: دیدن درخواست‌های جمع‌آوری پسماند، پذیرش، توزین و تسویه.";
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,
@@ -71,6 +72,7 @@ export default function RootLayout({
           <QueryProvider>
             <Providers>
               {children}
+              <PushRegister />
               <Toaster />
             </Providers>
             </QueryProvider>

@@ -1,338 +1,248 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { Phone, User, ShieldCheck, ArrowRight, Loader2, Lock } from 'lucide-react';
-import axios from "axios";
-import { API } from '@/services/const';
+import axios from 'axios';
 import Cookies from 'js-cookie';
+import { Phone, Lock, ArrowLeft, Loader2, Eye, EyeOff, Truck, ShieldCheck, Headphones } from 'lucide-react';
+
+import { API } from '@/services/const';
 import { useAuth } from '@/context/auth-context';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from '@/hooks/use-toast';
+import { C, S, alpha } from '@/components/ui/tokens';
+import { Btn, Field } from '@/components/ui/kit';
+import EcoGlobe from '@/components/ui/EcoGlobe';
+
+/**
+ * The collector's way in.
+ *
+ * Same emblem, same green, same IRANSans as the citizen app's login — the two
+ * apps are two doors into one system and should look like it. What differs is
+ * the wording: a collector signs in with credentials a city gave them, so the
+ * screen says who issues the account and what to do when it is missing, rather
+ * than offering a sign-up that does not exist on this side.
+ *
+ * The old screen offered a کاربر/مدیر tab pair that posted to the same endpoint
+ * either way — a choice with no consequence. It is gone.
+ */
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const [verifyCodeStatus, setVerifyCodeStatus] = useState(false);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState<number>();
-  const [enteredCode, setEnteredCode] = useState('');
-  const [timer, setTimer] = useState(90);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [phoneError, setPhoneError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [codeError, setCodeError] = useState('');
-  const [activeTab, setActiveTab] = useState('user');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const router = useRouter();
   const { toast } = useToast();
   const { login } = useAuth();
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+  const phoneOk = /^09\d{9}$/.test(phone);
+  const canSubmit = phoneOk && password.length >= 4 && !loading;
 
-    if (isTimerRunning && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (timer === 0) {
-      setIsTimerRunning(false);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning, timer]);
-
-  function generateFourDigitCode() {
-    return Math.floor(1000 + Math.random() * 9000);
-  }
-
-  function formatTimer(seconds: number): string {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  }
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '');
-    setPhone(value);
-    setVerifyCodeStatus(false);
-    setEnteredCode('');
-
-    if (/^09\d{9}$/.test(value) || value === '') {
-      setPhoneError('');
-    } else {
-      setPhoneError('شماره موبایل معتبر نیست');
-    }
-  };
-
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setPassword(value);
-
-    if (value.length < 6) {
-      setPasswordError('رمز عبور باید حداقل ۶ کاراکتر باشد');
-    } else {
-      setPasswordError('');
-    }
-  };
-
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '');
-
-    if (value.length <= 4) {
-      setEnteredCode(value);
-    }
-
-    if (value.length === 4) {
-      setCodeError('');
-    } else if (value.length > 0) {
-      setCodeError('کد تایید باید ۴ رقم باشد');
-    } else {
-      setCodeError('');
-    }
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) return;
+
     setLoading(true);
+    setError('');
 
-    const endpoint = activeTab === 'admin' ? API.SIGN_UP : API.SIGN_UP;
-
-    axios.post(endpoint, {
-      phone: `${phone}`,
-      password: password
-    })
+    axios
+      .post(API.SIGN_UP, { phone, password })
       .then((res: any) => {
+        const token = res.data?.token;
+        Cookies.set('auth_token', token, { expires: 30 });
+        login({ id: res.data?.user?._id || '', phone, token });
+        toast({ variant: 'success', title: 'خوش آمدید', description: 'وارد برنامهٔ جمع‌آور شدید' });
+        // A full navigation, not router.push: the middleware reads the cookie
+        // on the server, and a client-side transition would run before it.
+        window.location.href = '/';
+      })
+      .catch((err) => {
         setLoading(false);
-        const token = res.data.token;
-        Cookies.set('auth_token', token, { expires: 1 });
-        login({ id: res.data.user?._id || '1', phone: phone, token });
-        toast({
-          variant: 'success',
-          title: 'موفقیت',
-          description: 'با موفقیت وارد شدید',
-        });
-        router.push(activeTab === 'admin' ? '/admin/dashboard' : '/');
-      }).catch((err) => {
-        setLoading(false);
-        toast({
-          variant: 'destructive',
-          title: 'ناموفق',
-          description: err?.response?.data?.message || 'متاسفانه انجام نشد مجدد تلاش کنید',
-        });
+        const message =
+          err?.response?.data?.message ||
+          (err?.response?.status === 404
+            ? 'حسابی با این شمارهٔ همراه ثبت نشده است'
+            : 'ورود انجام نشد. دوباره تلاش کنید');
+        setError(message);
+        setPassword('');
       });
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background to-secondary/20 p-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">شهروند</h1>
-          <p className="text-muted-foreground">سامانه جمع‌آوری هوشمند پسماند</p>
-        </div>
+    <div
+      dir="rtl"
+      style={{
+        minHeight: '100vh',
+        background: C.bg,
+        color: C.text,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* ── the emblem, on the green ─────────────────────────────────────── */}
+      <header
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          background: `linear-gradient(150deg, ${C.heroStart}, ${C.heroEnd})`,
+          color: C.onHero,
+          padding: `calc(${S.s7}px + env(safe-area-inset-top)) ${S.s4}px ${S.s7 + 22}px`,
+          borderEndStartRadius: 34,
+          borderEndEndRadius: 34,
+          boxShadow: C.shadowHero,
+          textAlign: 'center',
+        }}
+      >
+        <span aria-hidden style={{ position: 'absolute', insetInlineStart: -70, top: -90, width: 230, height: 230, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+        <span aria-hidden style={{ position: 'absolute', insetInlineEnd: -50, bottom: -100, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+        <div style={{ position: 'relative', display: 'grid', justifyItems: 'center', gap: S.s3 }}>
+          <EcoGlobe size={182} />
+
+          <div>
+            <h1 style={{ margin: 0, fontSize: S.xxl, fontWeight: 900, letterSpacing: '-0.02em' }}>شهر شهر</h1>
+            <p style={{ margin: `${S.s2}px 0 0`, fontSize: S.sm, color: C.onHeroMuted, lineHeight: 1.9 }}>
+              برنامهٔ خدمات‌دهندگان — سامانهٔ خدمات شهری
+            </p>
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              ورود به سیستم
-            </span>
+
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.26)',
+              padding: '8px 15px', borderRadius: S.rPill, fontSize: S.xs, fontWeight: 700,
+            }}
+          >
+            <Truck className="h-3.5 w-3.5" />
+            ویژهٔ جمع‌آوران و رانندگان
+          </span>
+        </div>
+      </header>
+
+      {/* ── the form ─────────────────────────────────────────────────────── */}
+      <main
+        style={{
+          flex: 1,
+          width: '100%',
+          maxWidth: 460,
+          margin: '0 auto',
+          padding: `0 ${S.s4}px calc(${S.s6}px + env(safe-area-inset-bottom))`,
+        }}
+      >
+        <form
+          onSubmit={handleSubmit}
+          className="pm-fade-up"
+          style={{
+            marginTop: -30,
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: S.r4,
+            boxShadow: C.shadowLift,
+            padding: S.s5,
+            display: 'grid',
+            gap: S.s4,
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: S.lg, fontWeight: 800, color: C.textStrong }}>ورود به حساب</h2>
+            <p style={{ margin: `${S.s2}px 0 0`, fontSize: S.xs, color: C.muted, lineHeight: 1.9 }}>
+              با شمارهٔ همراه و رمزی که شهرداری شهر شما صادر کرده وارد شوید.
+            </p>
           </div>
-        </div>
 
-        <Tabs defaultValue="user" className="w-full" onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="user" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              کاربر
-            </TabsTrigger>
-            <TabsTrigger value="admin" className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" />
-              مدیر
-            </TabsTrigger>
-          </TabsList>
+          <Field label="شمارهٔ همراه" icon={<Phone className="h-4 w-4" style={{ color: C.green }} />}>
+            <input
+              className="pm-field tnum"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="username"
+              dir="ltr"
+              placeholder="09xxxxxxxxx"
+              value={phone}
+              maxLength={11}
+              disabled={loading}
+              onChange={(e) => {
+                setPhone(e.target.value.replace(/\D/g, '').slice(0, 11));
+                setError('');
+              }}
+            />
+          </Field>
 
-          <TabsContent value="user">
-            <Card>
-              <CardHeader>
-                <CardTitle>ورود کاربر</CardTitle>
-                <CardDescription>
-                  برای استفاده از خدمات شهروند وارد شوید
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <LoginForm
-                  phone={phone}
-                  password={password}
-                  loading={loading}
-                  verifyCodeStatus={verifyCodeStatus}
-                  phoneError={phoneError}
-                  passwordError={passwordError}
-                  enteredCode={enteredCode}
-                  timer={timer}
-                  handlePhoneChange={handlePhoneChange}
-                  handlePasswordChange={handlePasswordChange}
-                  handleCodeChange={handleCodeChange}
-                  handleLogin={handleLogin}
-                  formatTimer={formatTimer}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <Field label="رمز عبور" icon={<Lock className="h-4 w-4" style={{ color: C.green }} />}>
+            <div style={{ position: 'relative' }}>
+              <input
+                className="pm-field"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                dir="ltr"
+                placeholder="••••••"
+                value={password}
+                disabled={loading}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError('');
+                }}
+                style={{ paddingInlineEnd: 46 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                style={{
+                  position: 'absolute', insetInlineEnd: 8, top: '50%', transform: 'translateY(-50%)',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: C.subtle, padding: 8, display: 'grid', placeItems: 'center',
+                }}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </Field>
 
-          <TabsContent value="admin">
-            <Card>
-              <CardHeader>
-                <CardTitle>ورود مدیر</CardTitle>
-                <CardDescription>
-                  پنل مدیریت سیستم جمع‌آوری پسماند
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <LoginForm
-                  phone={phone}
-                  password={password}
-                  loading={loading}
-                  verifyCodeStatus={verifyCodeStatus}
-                  phoneError={phoneError}
-                  passwordError={passwordError}
-                  enteredCode={enteredCode}
-                  timer={timer}
-                  handlePhoneChange={handlePhoneChange}
-                  handlePasswordChange={handlePasswordChange}
-                  handleCodeChange={handleCodeChange}
-                  handleLogin={handleLogin}
-                  formatTimer={formatTimer}
-                  isAdmin
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
-}
-
-interface LoginFormProps {
-  phone: string;
-  password: string;
-  loading: boolean;
-  verifyCodeStatus: boolean;
-  phoneError: string;
-  passwordError: string;
-  enteredCode: string;
-  timer: number;
-  handlePhoneChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handlePasswordChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleCodeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleLogin: (e: React.FormEvent) => void;
-  formatTimer: (seconds: number) => string;
-  isAdmin?: boolean;
-}
-
-function LoginForm({
-  phone,
-  password,
-  loading,
-  verifyCodeStatus,
-  phoneError,
-  passwordError,
-  enteredCode,
-  timer,
-  handlePhoneChange,
-  handlePasswordChange,
-  handleCodeChange,
-  handleLogin,
-  formatTimer,
-  isAdmin
-}: LoginFormProps) {
-  return (
-    <form className="space-y-4" onSubmit={handleLogin}>
-      <div className="space-y-2">
-        <Label htmlFor="phone">شماره همراه</Label>
-        <div className="relative">
-          <Phone className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="phone"
-            placeholder={`${isAdmin ? 'شماره همراه مدیر' : 'شماره همراه'} را وارد کنید`}
-            type="tel"
-            value={phone}
-            disabled={loading || verifyCodeStatus}
-            onChange={handlePhoneChange}
-            className="pr-10"
-            required
-          />
-        </div>
-        {phoneError && (
-          <p className="text-destructive text-sm">{phoneError}</p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="password">رمز عبور</Label>
-        <div className="relative">
-          <Lock className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="password"
-            placeholder="رمز عبور خود را وارد کنید"
-            type="password"
-            value={password}
-            disabled={loading}
-            onChange={handlePasswordChange}
-            className="pr-10"
-            required
-          />
-        </div>
-        {passwordError && (
-          <p className="text-destructive text-sm">{passwordError}</p>
-        )}
-      </div>
-
-      {verifyCodeStatus && (
-        <div className="space-y-2">
-          <Label htmlFor="code">کد تایید</Label>
-          <Input
-            id="code"
-            placeholder="کد ۴ رقمی را وارد کنید"
-            type="number"
-            maxLength={4}
-            value={enteredCode}
-            disabled={loading}
-            onChange={handleCodeChange}
-            className="pr-10"
-            required
-          />
-          {timer > 0 && (
-            <p className="text-sm text-muted-foreground text-center mt-2">
-              {formatTimer(timer)} تا ارسال مجدد کد
+          {error && (
+            <p
+              role="alert"
+              style={{
+                margin: 0, padding: `${S.s3}px ${S.s4}px`, borderRadius: S.r1,
+                background: alpha(C.statusDanger, 10), border: `1px solid ${alpha(C.statusDanger, 26)}`,
+                color: C.statusDanger, fontSize: S.xs, fontWeight: 700, lineHeight: 1.8,
+              }}
+            >
+              {error}
             </p>
           )}
-        </div>
-      )}
 
-      <Button
-        type="submit"
-        disabled={loading || phone.length !== 11 || password.length < 6 || !!phoneError || !!passwordError}
-        className="w-full"
-      >
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            ورود
-            <ArrowRight className="mr-2 h-4 w-4" />
-          </>
-        )}
-      </Button>
-    </form>
+          <Btn type="submit" full disabled={!canSubmit}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ArrowLeft className="h-4 w-4" />ورود</>}
+          </Btn>
+
+          <div
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: S.s2,
+              padding: `${S.s3}px ${S.s3}px`, borderRadius: S.r1,
+              background: C.bgSubtle, border: `1px solid ${C.border}`,
+            }}
+          >
+            <Headphones className="h-4 w-4" style={{ color: C.muted, flexShrink: 0, marginTop: 2 }} />
+            <p style={{ margin: 0, fontSize: S.xs, color: C.muted, lineHeight: 1.9 }}>
+              حساب ندارید یا رمزتان را فراموش کرده‌اید؟ ثبت‌نام در این برنامه انجام نمی‌شود — با مدیر
+              پسماند شهر خود تماس بگیرید تا حساب شما را بسازد یا رمز تازه‌ای صادر کند.
+            </p>
+          </div>
+        </form>
+
+        <p
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            margin: `${S.s5}px 0 0`, fontSize: S.xs, color: C.subtle,
+          }}
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          ورود شما رمزنگاری‌شده است
+        </p>
+      </main>
+    </div>
   );
 }

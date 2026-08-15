@@ -1,591 +1,287 @@
-"use client"
-import React, { useEffect, useState } from 'react';
-import { MapPin, Eye, Plus, X, Trash, Scale, Recycle, Filter, Phone, PhoneCall } from 'lucide-react';
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import {
+  Inbox, MapPin, PhoneCall, CalendarClock, Check, Loader2, RefreshCw, Navigation2, X, ShieldAlert,
+} from 'lucide-react';
+
 import { axiosService } from '@/lib/axiosService';
 import { toast } from '@/hooks/use-toast';
 import { API } from '@/services/const';
-import dynamic from 'next/dynamic';
-import { useAuth } from '@/context/auth-context';
-import { Button } from '@/components/ui/button';
+import { C, S, alpha } from '@/components/ui/tokens';
+import { Screen, Hero, Card, IconBadge, Btn, Chip, Modal, EmptyState, Shimmer, SectionTitle } from '@/components/ui/kit';
+import { PasmandRequest, authHeader, faDate, mapsUrl } from '@/lib/requests';
 
 const MapWithNoSSR = dynamic(() => import('@/components/views/Components/map'), {
   ssr: false,
-  loading: () => (
-    <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
-      در حال بارگذاری نقشه...
-    </div>
-  ),
+  loading: () => <div style={{ height: 320, display: 'grid', placeItems: 'center', color: C.muted }}>در حال بارگذاری نقشه…</div>,
 });
 
-interface TimeSlot {
-  date: string;
-  time: string;
-  _id: string;
-}
+/**
+ * The open work in this collector's city.
+ *
+ * A job board, not a table: the only decision on this screen is take it or
+ * leave it, so each card leads with when and where and puts «انجام می‌دهم»
+ * where a thumb lands. Everything that is not part of that decision — items,
+ * weights, prices — belongs on the next screen, after the job is theirs.
+ *
+ * The list refreshes on its own because the collector is the second half of a
+ * push notification: they get told a request exists, open the app, and the card
+ * has to be there. It also refreshes when the tab comes back to the foreground,
+ * which is what actually happens after tapping a notification.
+ */
 
-interface Location {
-  lat: number;
-  lng: number;
-  title?: string;
-  address?: string;
-}
+const REFRESH_MS = 45000;
 
-interface User {
-  _id: string;
-  first_name: string;
-  last_name: string;
-  phone: string;
-}
+export default function NewRequestsPage() {
+  const [requests, setRequests] = useState<PasmandRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [accepting, setAccepting] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const [mapFor, setMapFor] = useState<PasmandRequest | null>(null);
 
-interface Material {
-  _id: string;
-  title: string;
-  type: string;
-  quantity: number;
-  unit: string;
-  pricePerUnit: number;
-}
-
-interface Request {
-  _id: string;
-  description: string;
-  status: 'pending' | 'collecting' | 'completed' | 'canceled';
-  location: Location;
-  items: Material[];
-  date: string;
-  timeSlot: TimeSlot;
-  totalPrice: number;
-  user: User;
-  collector?: User;
-}
-
-interface RequestBody {
-  userId?: string;
-  status?: string;
-}
-
-const units = [
-  {
-    title: 'گرم',
-    key: 'g'
-  },
-  {
-    title: 'کیلوگرم',
-    key: 'kg'
-  },
-  {
-    title: 'تن',
-    key: 'ton'
-  }
-];
-
-const statusOptions = [
-  // { value: '', label: 'همه' },
-  { value: 'pending', label: 'در انتظار' },
-  // { value: 'collecting', label: 'در حال جمع‌آوری' },
-  // { value: 'completed', label: 'تکمیل شده' },
-  // { value: 'canceled', label: 'لغو شده' }
-];
-
-function NewRequestsPage() {
-  const { user } = useAuth()
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
-  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [doLoading, setDoLoading] = useState<boolean>(false);
-  const [newMaterial, setNewMaterial] = useState<any>({});
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [materialTypes, setMaterialTypes] = useState<Material[]>([]);
-  const [error, setError] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('pending');
-  const defaultCenter = { lat: 35.6892, lng: 51.3890 }; // تهران
-
-  const getData = () => {
-    setLoading(true);
-    axiosService({
-      url: API.GET_MATERIAL,
-      method: 'get',
-    })
-      .then((res: any) => {
-        setMaterialTypes(res?.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        toast({
-          variant: 'destructive',
-          title: 'ناموفق',
-          description: 'متاسفانه انجام نشد صفحه را دوباره بارگزاری کنید',
-        });
-        setLoading(false);
-      });
-  };
-
-  const getRequests = () => {
-    setLoading(true);
-    const requestBody: RequestBody = {
-      userId: user?.id
-    };
-
-    if (selectedStatus) {
-      requestBody.status = 'pending';
-    }
+  const load = useCallback((quiet = false) => {
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
 
     axiosService({
       url: API.GET_PENDING_REQUESTS,
       method: 'post',
-      body: requestBody
+      body: { status: 'pending' },
+      headers: authHeader(),
     })
       .then((res: any) => {
         setRequests(res?.data?.results || []);
-        setLoading(false);
+        // The server distinguishes "no work today" from "your account cannot
+        // see work yet", and so should the screen.
+        setNotice(res?.data?.accessDisabled || res?.data?.noCity ? res.data.message : '');
       })
-      .catch((err) => {
+      .catch((err: any) => {
         toast({
           variant: 'destructive',
           title: 'ناموفق',
-          description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
+          description: err?.data?.message || 'دریافت درخواست‌ها انجام نشد',
         });
+      })
+      .finally(() => {
         setLoading(false);
+        setRefreshing(false);
       });
-  };
-
-  useEffect(() => {
-    getData();
   }, []);
 
   useEffect(() => {
-    if (user?.id) {
-      getRequests();
-    }
-  }, [selectedStatus, user]);
+    load();
+    const id = setInterval(() => load(true), REFRESH_MS);
+    const onFocus = () => { if (!document.hidden) load(true); };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [load]);
 
-  const handleAddMaterial = () => {
-    setError('');
-    if (!newMaterial._id) {
-      setError('لطفاً نوع ماده را انتخاب کنید');
-      return;
-    }
-    if (newMaterial.quantity <= 0) {
-      setError('مقدار باید بیشتر از صفر باشد');
-      return;
-    }
-
-    const selectedMaterialType = materialTypes.find(m => m._id === newMaterial._id);
-    if (selectedMaterialType) {
-      const material: Material = {
-        ...selectedMaterialType,
-        quantity: newMaterial.quantity
-      };
-      setMaterials([...materials, material]);
-      setNewMaterial({ _id: '', quantity: 0 });
-    }
-  };
-
-  const handleRemoveMaterial = (id: string) => {
-    setMaterials(materials.filter(m => m._id !== id));
-  };
-
-  const formatUnit = (unit: string) => {
-    return units.find((item) => item?.key === unit)?.title;
-  };
-
-  const calculateItemPrice = (material: Material) => {
-    return material.quantity * material.pricePerUnit;
-  };
-
-  const calculateTotalPrice = () => {
-    return materials.reduce((total, material) => total + calculateItemPrice(material), 0);
-  };
-
-  const handleSaveRequest = () => {
-    if (selectedRequest) {
-      // اینجا باید API مربوط به آپدیت درخواست اضافه شود
-      axiosService({
-        url: API.UPDATE_ITEMS_REQUESTS,
-        method: 'put',
-        body: {
-          requestId: selectedRequest?._id,
-          items: materials
-        }
-      })
-        .then((res: any) => {
-          setIsDetailsModalOpen(false);
-          setMaterials([]);
-          setError('');
-          getRequests();
-        })
-        .catch((err) => {
-          toast({
-            variant: 'destructive',
-            title: 'ناموفق',
-            description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
-          });
-          setLoading(false);
-        });
-    }
-  };
-
-  const collect = (requestId: any) => {
-    setDoLoading(true)
+  const accept = (id: string) => {
+    setAccepting(id);
     axiosService({
       url: API.COLLECT_REQUESTS,
       method: 'put',
-      body: {
-        id: requestId,
-        collector: user?.id
-      }
+      body: { id },
+      headers: authHeader(),
     })
-      .then((res: any) => {
-        setLoading(false)
-        toast({
-          variant: 'success',
-          title: 'موفق',
-          description: 'با موفقیت انجام شد',
-        });
-        getRequests();
+      .then(() => {
+        toast({ variant: 'success', title: 'پذیرفته شد', description: 'درخواست به «کارهای من» اضافه شد و به شهروند اطلاع داده شد' });
+        // Drop it here rather than refetch: the card must not flicker back.
+        setRequests((prev) => prev.filter((r) => r._id !== id));
       })
-      .catch((err) => {
-        setLoading(false)
-        console.log(err);
-        
+      .catch((err: any) => {
         toast({
           variant: 'destructive',
           title: 'ناموفق',
-          description: err?.data?.message || 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
+          description: err?.data?.message || 'پذیرش انجام نشد',
         });
-        setLoading(false);
-      });
-    // بروزرسانی لیست درخواست‌ها
-  }
-
-  const getStatusColor = (status: Request['status']) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
-      case 'collecting':
-        return 'bg-blue-50 text-blue-700 border border-blue-200';
-      case 'completed':
-        return 'bg-green-50 text-green-700 border border-green-200';
-      case 'canceled':
-        return 'bg-red-50 text-red-700 border border-red-200';
-      default:
-        return 'bg-gray-50 text-gray-700 border border-gray-200';
-    }
-  };
-
-  const getStatusText = (status: Request['status']) => {
-    return statusOptions.find(option => option.value === status)?.label || status;
-  };
-
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('fa-IR').format(num);
+        // Somebody else probably took it — get the truth from the server.
+        load(true);
+      })
+      .finally(() => setAccepting(null));
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-[120px] sm:py-[120px] px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8 flex-col sm:flex-row gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
-              <Recycle className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-              لیست درخواست‌های جدید
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm">
-            <Filter className="w-5 h-5 text-gray-500" />
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="border-0 focus:ring-0 text-sm"
-            >
-              {statusOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+    <Screen>
+      <Hero
+        icon={<Inbox className="h-6 w-6" />}
+        title="درخواست‌های جدید"
+        sub="کارهای آزاد شهر شما. هر کدام را بپذیرید به «کارهای من» می‌رود و شهروند بی‌درنگ باخبر می‌شود."
+        aside={
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: S.s2,
+              background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.3)',
+              color: C.onHero, padding: '12px 18px', borderRadius: S.rPill,
+              fontSize: S.sm, fontWeight: 800, whiteSpace: 'nowrap',
+            }}
+          >
+            <span className="tnum">{new Intl.NumberFormat('fa-IR').format(requests.length)}</span>
+            کار آزاد
+          </span>
+        }
+      />
+
+      <SectionTitle
+        title="در انتظار پذیرش"
+        action={
+          <button
+            type="button"
+            onClick={() => load(true)}
+            disabled={refreshing}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent',
+              border: `1px solid ${C.border}`, borderRadius: S.rPill, padding: '7px 13px',
+              fontFamily: 'inherit', fontSize: S.xs, fontWeight: 700, color: C.muted, cursor: 'pointer',
+            }}
+          >
+            <RefreshCw className={refreshing ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+            بروزرسانی
+          </button>
+        }
+      />
+
+      {notice && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: S.s3, marginBottom: S.s4,
+            padding: S.s4, borderRadius: S.r2,
+            background: alpha(C.amber, 10), border: `1px solid ${alpha(C.amber, 28)}`,
+          }}
+        >
+          <ShieldAlert className="h-5 w-5" style={{ color: C.amber, flexShrink: 0 }} />
+          <p style={{ margin: 0, fontSize: S.sm, color: C.text, lineHeight: 1.9, fontWeight: 600 }}>{notice}</p>
         </div>
+      )}
 
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">در حال بارگذاری...</p>
-          </div>
-        ) : requests.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl shadow-sm">
-            <p className="text-gray-500">هیچ درخواستی یافت نشد</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:gap-6">
-            {requests.map((request) => (
-              <div
-                key={request._id}
-                className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-4 sm:p-6 border border-gray-100"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div className="space-y-3 w-full sm:w-auto">
-                    <h3 className="text-xl font-semibold text-gray-900">درخواست بازیافت</h3>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">تاریخ ثبت:</span>
-                      <span className="text-gray-700">{new Date(request.date).toLocaleDateString('fa-IR')}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">زمان جمع‌آوری:</span>
-                      <span className="text-gray-700">{request.timeSlot.date} - {request.timeSlot.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">شماره تماس:</span>
-                      <a
-                        href={`tel:${request.user.phone}`}
-                        className="flex items-center gap-2 px-2 py-1 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200 shadow-sm group"
-                        title="برای تماس کلیک کنید"
-                      >
-                        <PhoneCall className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform duration-200" />
-                        <span className="text-green-700 underline group-hover:text-green-900 font-medium">{request.user.phone}</span>
-                      </a>
-                    </div>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
-                      {getStatusText(request.status)}
-                    </span>
-                    <div className="flex items-start gap-2 bg-gray-50 p-3 rounded-xl">
-                      <MapPin className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-700">{request.location.title || 'آدرس'}</span>
-                        <span className="text-sm text-gray-600">{request.location.address || 'جزئیات آدرس موجود نیست'}</span>
-                      </div>
-                    </div>
-                    {request.collector && (
-                      <div className="bg-blue-50 p-3 rounded-xl">
-                        <p className="text-sm font-medium text-blue-800">جمع‌آوری کننده:</p>
-                        <p className="text-sm text-blue-700">
-                          {request.collector.first_name} {request.collector.last_name} - {request.collector.phone}
-                        </p>
-                      </div>
-                    )}
-                    {request.description && (
-                      <div className="bg-gray-50 p-3 rounded-xl">
-                        <p className="text-sm text-gray-600">{request.description}</p>
-                      </div>
-                    )}
-                    {!request.collector && (
-                      <div className="w-full">
-                        <Button
-                          onClick={() => {
-                            collect(request._id)
-                          }}
-                          className='bg-secondary' size='sm'>انجام می دهم</Button>
-                      </div>
-                    )}
+      {loading ? (
+        <div style={{ display: 'grid', gap: S.s3 }}>
+          <Shimmer height={210} />
+          <Shimmer height={210} />
+        </div>
+      ) : requests.length === 0 ? (
+        <EmptyState
+          icon={<Inbox className="h-6 w-6" />}
+          title={notice ? 'فعلاً چیزی برای نمایش نیست' : 'در حال حاضر کار آزادی نیست'}
+          sub={notice ? undefined : 'به‌محض ثبت درخواست تازه در شهر شما، اینجا ظاهر می‌شود و اعلان می‌گیرید.'}
+        />
+      ) : (
+        <div style={{ display: 'grid', gap: S.s3 }}>
+          {requests.map((r, i) => (
+            <Card key={r._id} accent={C.green}>
+              <div className="pm-fade-up" style={{ padding: S.s4, display: 'grid', gap: S.s3, animationDelay: `${i * 40}ms` }}>
+                {/* when */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: S.s3 }}>
+                  <IconBadge color={C.green}><CalendarClock className="h-5 w-5" /></IconBadge>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>
+                      {r.timeSlot?.date || '—'}
+                    </p>
+                    <p className="tnum" style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted }}>
+                      ساعت {r.timeSlot?.time || '—'} · ثبت {faDate(r.date)}
+                    </p>
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto justify-end">
-                    {/* <button
-                      onClick={() => {
-                        setSelectedRequest(request);
-                        setMaterials(request.items);
-                        setIsDetailsModalOpen(true);
-                      }}
-                      className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
-                      title="جزئیات و جمع‌آوری"
-                    >
-                      <span className="sm:hidden">جزئیات</span>
-                      <Eye className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                    </button> */}
-                    <button
-                      onClick={() => {
-                        setSelectedRequest(request);
-                        setIsAddressModalOpen(true);
-                      }}
-                      className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
-                      title="نمایش آدرس"
-                    >
-                      <span className="sm:hidden">آدرس</span>
-                      <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                    </button>
+                  <Chip color={C.statusWarn}>در انتظار</Chip>
+                </div>
+
+                {/* where */}
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: S.s2,
+                    background: C.bgSubtle, border: `1px solid ${C.border}`,
+                    borderRadius: S.r1, padding: S.s3,
+                  }}
+                >
+                  <MapPin className="h-4 w-4" style={{ color: C.green, flexShrink: 0, marginTop: 3 }} />
+                  <p style={{ margin: 0, fontSize: S.sm, color: C.text, lineHeight: 1.9 }}>
+                    {r.location?.address || 'آدرس ثبت نشده است'}
+                  </p>
+                </div>
+
+                {r.description && (
+                  <p style={{ margin: 0, fontSize: S.xs, color: C.muted, lineHeight: 1.9 }}>
+                    یادداشت شهروند: {r.description}
+                  </p>
+                )}
+
+                {/* What to do about it. Two rows rather than one wrapping row:
+                    three buttons do not fit across a 390px phone, and letting
+                    them wrap dropped «تماس» onto a line of its own with a gap
+                    beside it. The decision gets the full width; the two
+                    supporting actions split the row under it. */}
+                <div style={{ display: 'grid', gap: S.s2 }}>
+                  <Btn full onClick={() => accept(r._id)} disabled={accepting === r._id}>
+                    {accepting === r._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    انجام می‌دهم
+                  </Btn>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: S.s2 }}>
+                    <Btn variant="soft" color={C.statusInfo} full onClick={() => setMapFor(r)}>
+                      <MapPin className="h-4 w-4" />
+                      نقشه
+                    </Btn>
+
+                    {/* Phone before acceptance is deliberate: a collector often
+                        needs one question answered ("is it up three flights?")
+                        before committing to the job. */}
+                    <a href={`tel:${r.user?.phone}`} style={{ textDecoration: 'none' }}>
+                      <Btn variant="soft" color={C.green} full>
+                        <PhoneCall className="h-4 w-4" />
+                        تماس
+                      </Btn>
+                    </a>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </Card>
+          ))}
+        </div>
+      )}
 
-        {/* Address Modal */}
-        {isAddressModalOpen && selectedRequest && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm modal-overlay flex items-center justify-center p-4 z-[1000000]">
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl transform transition-all duration-300">
-              <div className="p-6">
-                <div className="flex flex-row-reverse justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold">آدرس محل جمع‌آوری</h2>
-                  <button
-                    onClick={() => setIsAddressModalOpen(false)}
-                    className="p-2 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors duration-200"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 rounded-xl">
-                    <h3 className="font-semibold text-lg text-blue-900 mb-3">{selectedRequest.location.title || 'آدرس'}</h3>
-                    <p className="text-blue-800 leading-relaxed">{selectedRequest.location.address || 'جزئیات آدرس موجود نیست'}</p>
-                  </div>
-                </div>
-                <div className="relative h-[350px] rounded-lg mb-6 overflow-hidden border-2 border-gray-200 mt-4">
-                  <MapWithNoSSR
-                    center={selectedRequest.location || { lat: 35.6892, lng: 51.3890 }}
-                    onLocationSelect={() => { }}
-                    selectedLocation={selectedRequest.location}
-                  />
-                </div>
-              </div>
+      {mapFor && (
+        <Modal onClose={() => setMapFor(null)} wide>
+          <div style={{ padding: S.s4, display: 'flex', alignItems: 'center', gap: S.s3, borderBottom: `1px solid ${C.border}` }}>
+            <IconBadge color={C.statusInfo}><MapPin className="h-5 w-5" /></IconBadge>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>محل جمع‌آوری</p>
+              <p style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted, lineHeight: 1.8 }}>
+                {mapFor.location?.address || '—'}
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setMapFor(null)}
+              aria-label="بستن"
+              style={{ background: 'transparent', border: 'none', color: C.subtle, cursor: 'pointer', padding: 6 }}
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-        )}
 
-        {/* Details Modal */}
-        {isDetailsModalOpen && selectedRequest && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm modal-overlay flex items-center justify-center p-4 z-[1000000]">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-4 sm:p-6">
-                <div className="flex flex-row-reverse justify-between items-center mb-8">
-                  <h2 className="text-xl sm:text-2xl font-bold">جزئیات درخواست</h2>
-                  <button
-                    onClick={() => {
-                      setIsDetailsModalOpen(false);
-                      setError('');
-                    }}
-                    className="p-2 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors duration-200"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                      <Scale className="w-5 h-5" />
-                      افزودن مواد بازیافتی
-                    </h3>
-
-                    {error && (
-                      <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100">
-                        {error}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                      <select
-                        value={newMaterial._id}
-                        onChange={(e) => {
-                          const selectedType = materialTypes.find(type => type._id === e.target.value);
-                          setNewMaterial({ ...newMaterial, ...selectedType });
-                        }}
-                        className="flex-1 py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow duration-200"
-                      >
-                        <option value="">انتخاب نوع ماده</option>
-                        {materialTypes.map((type) => (
-                          <option key={type._id} value={type._id}>
-                            {type.title}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-3 items-center">
-                        <input
-                          type="number"
-                          value={newMaterial.quantity || ''}
-                          onChange={(e) => setNewMaterial({ ...newMaterial, quantity: Number(e.target.value) })}
-                          placeholder="مقدار"
-                          className="w-full sm:w-32 py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow duration-200 text-left"
-                          min="0"
-                        />
-                        <span className="text-gray-500 whitespace-nowrap">{formatUnit(newMaterial.unit)}</span>
-                      </div>
-                      <button
-                        onClick={handleAddMaterial}
-                        className="w-full sm:w-auto px-4 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow"
-                      >
-                        <Plus className="w-5 h-5" />
-                        افزودن
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {materials.map((material) => (
-                        <div
-                          key={material._id}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gray-50 p-4 rounded-xl hover:bg-gray-100 transition-all duration-200 gap-4"
-                        >
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
-                            <span className="font-medium text-gray-900">{material.title}</span>
-                            <div className="flex flex-wrap gap-2 sm:gap-3">
-                              <span className="text-gray-600 bg-white px-3 py-1.5 rounded-full text-sm border border-gray-200">
-                                {formatNumber(material.quantity)} {formatUnit(material.unit)}
-                              </span>
-                              <span className="text-gray-600 bg-white px-3 py-1.5 rounded-full text-sm border border-gray-200">
-                                {formatNumber(material.pricePerUnit)} تومان / {formatUnit(material.unit)}
-                              </span>
-                              <span className="text-green-600 bg-green-50 px-3 py-1.5 rounded-full text-sm border border-green-200">
-                                {formatNumber(calculateItemPrice(material))} تومان
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveMaterial(material._id)}
-                            className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-all duration-200 sm:flex-shrink-0"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-
-                      {materials.length === 0 && (
-                        <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
-                          هنوز موردی اضافه نشده است
-                        </div>
-                      )}
-
-                      {materials.length > 0 && (
-                        <div className="mt-6 p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl text-white shadow-lg">
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold">جمع کل:</span>
-                            <span className="font-bold text-lg">
-                              {formatNumber(calculateTotalPrice())} تومان
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col-reverse sm:flex-row justify-start gap-4 pt-6 border-t">
-                    <button
-                      onClick={handleSaveRequest}
-                      // disabled={materials.length === 0}
-                      className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2"
-                    >
-                      ثبت درخواست
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsDetailsModalOpen(false);
-                        setError('');
-                      }}
-                      className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 flex items-center justify-center gap-2"
-                    >
-                      انصراف
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div style={{ height: 330, position: 'relative' }}>
+            <MapWithNoSSR
+              center={mapFor.location || { lat: 35.6892, lng: 51.389 }}
+              onLocationSelect={() => {}}
+              selectedLocation={mapFor.location}
+            />
           </div>
-        )}
-      </div>
-    </div>
+
+          <div style={{ padding: S.s4 }}>
+            <a href={mapsUrl(mapFor.location)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>
+              <Btn full>
+                <Navigation2 className="h-4 w-4" />
+                مسیریابی در گوگل‌مپ
+              </Btn>
+            </a>
+          </div>
+        </Modal>
+      )}
+    </Screen>
   );
 }
-
-export default NewRequestsPage;

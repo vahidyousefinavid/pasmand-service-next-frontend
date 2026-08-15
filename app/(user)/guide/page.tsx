@@ -2,7 +2,7 @@ import GuidePage from "@/components/views/Guide/guide";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'راهنما اپلیکیشن',
+  title: 'راهنمای جمع‌آوری',
   description: ''
 }
 

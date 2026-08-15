@@ -3,7 +3,7 @@ import NewRequestView from "@/components/views/NewRequest/new-request";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'سوابق درخواست ها',
+  title: 'سوابق و درآمد',
   description: ''
 }
 

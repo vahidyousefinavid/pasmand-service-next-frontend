@@ -2,7 +2,7 @@
     border: 1px solid #e5e7eb; /* Gray border similar to your other form elements */
     border-radius: 0.375rem; /* Rounded corners */
     padding: 0.75rem;
-    font-family: 'Vazir', sans-serif; /* Persian font family for better compatibility */
+    font-family: 'IRANSans', ui-sans-serif, system-ui, sans-serif;
   }
   
   .react-date-picker .react-date-picker__calendar {

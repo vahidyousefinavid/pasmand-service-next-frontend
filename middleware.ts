@@ -18,6 +18,10 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|img|favicon.ico|manifest.json|icons/.*).*)',
+    // Anything with a dot in it is a file, not a screen. The old list named a
+    // few by hand and missed /sw.js, so the service worker fetched a 307 to
+    // /login and the browser refused to register it — which took push
+    // notifications down with it. Fonts and icons were losing the same way.
+    '/((?!api|_next/static|_next/image|.*\\..*).*)',
   ],
 };

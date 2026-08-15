@@ -1,578 +1,630 @@
-"use client"
-import React, { useEffect, useState } from 'react';
-import { MapPin, Eye, Plus, X, Trash, Scale, Recycle, Filter, PhoneCall } from 'lucide-react';
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import {
+  ClipboardList, MapPin, PhoneCall, MessageSquare, CalendarClock, Scale, Plus, Trash2,
+  Navigation2, X, Loader2, Wallet, Banknote, CheckCircle2, RefreshCw,
+} from 'lucide-react';
+
 import { axiosService } from '@/lib/axiosService';
 import { toast } from '@/hooks/use-toast';
 import { API } from '@/services/const';
-import dynamic from 'next/dynamic';
-import { useAuth } from '@/context/auth-context';
+import { C, S, alpha } from '@/components/ui/tokens';
+import {
+  Screen, Hero, Card, IconBadge, Btn, Chip, Modal, EmptyState, Shimmer, Segmented, StepRail, Field,
+} from '@/components/ui/kit';
+import RequestChat from '@/components/views/Chat/request-chat';
+import {
+  PasmandRequest, Item, Status, STATUS, STAGES, stageOf, authHeader, faDate, toman, unitName, mapsUrl,
+} from '@/lib/requests';
 
 const MapWithNoSSR = dynamic(() => import('@/components/views/Components/map'), {
   ssr: false,
-  loading: () => (
-    <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">
-      در حال بارگذاری نقشه...
-    </div>
-  ),
+  loading: () => <div style={{ height: 320, display: 'grid', placeItems: 'center', color: C.muted }}>در حال بارگذاری نقشه…</div>,
 });
 
-interface TimeSlot {
-  date: string;
-  time: string;
-  _id: string;
-}
+/**
+ * The jobs this collector has taken, from acceptance to settlement.
+ *
+ * Each card carries the whole job: the stage it is standing on, the citizen and
+ * two ways to reach them, and — while it is live — the one action that moves it
+ * forward. The stage rail is the same component and the same four stages the
+ * citizen sees in their own history, so when the two of them are on the phone
+ * they are describing the same picture.
+ *
+ * Settling is a separate sheet because it is a different kind of work: weighing
+ * items and agreeing an amount, done standing at somebody's door, with a total
+ * that has to be right.
+ */
 
-interface Location {
-  lat: number;
-  lng: number;
-  title?: string;
-  address?: string;
-}
+type Filter = 'collecting' | 'completed' | 'canceled';
 
-interface User {
-  _id: string;
-  first_name: string;
-  last_name: string;
-  phone: string;
-}
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: 'collecting', label: 'جاری' },
+  { value: 'completed', label: 'تکمیل شده' },
+  { value: 'canceled', label: 'لغو شده' },
+];
 
-interface Material {
+interface MaterialType {
   _id: string;
   title: string;
-  type: string;
-  quantity: number;
   unit: string;
   pricePerUnit: number;
+  category?: string;
 }
 
-interface Request {
-  _id: string;
-  description: string;
-  status: 'pending' | 'collecting' | 'completed' | 'canceled';
-  location: Location;
-  items: Material[];
-  date: string;
-  timeSlot: TimeSlot;
-  totalPrice: number;
-  user: User;
-  collector?: User;
-  paymentMethod?: string
-}
+export default function RequestsPage() {
+  const [filter, setFilter] = useState<Filter>('collecting');
+  const [requests, setRequests] = useState<PasmandRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-interface RequestBody {
-  userId?: string;
-  status?: string;
-}
+  const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([]);
+  const [mapFor, setMapFor] = useState<PasmandRequest | null>(null);
+  const [chatFor, setChatFor] = useState<string | null>(null);
+  const [settleFor, setSettleFor] = useState<PasmandRequest | null>(null);
+  /** Unread message count per request id, for the badge on the chat button. */
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
-const units = [
-  {
-    title: 'گرم',
-    key: 'g'
-  },
-  {
-    title: 'کیلوگرم',
-    key: 'kg'
-  },
-  {
-    title: 'تن',
-    key: 'ton'
-  }
-];
+  const load = useCallback(
+    (status: Filter, quiet = false) => {
+      if (quiet) setRefreshing(true);
+      else setLoading(true);
 
-const statusOptions = [
-  { value: '', label: 'همه' },
-  { value: 'pending', label: 'در انتظار' },
-  { value: 'collecting', label: 'در حال جمع‌آوری' },
-  { value: 'completed', label: 'تکمیل شده' },
-  { value: 'canceled', label: 'لغو شده' }
-];
-
-function RequestsPage() {
-  const { user } = useAuth()
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
-  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [newMaterial, setNewMaterial] = useState<any>({});
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [materialTypes, setMaterialTypes] = useState<Material[]>([]);
-  const [error, setError] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('collecting');
-  const [paymentMethod, setPaymentMethod] = useState<any>('wallet')
-  const defaultCenter = { lat: 35.6892, lng: 51.3890 }; // تهران
-
-  const getData = () => {
-    setLoading(true);
-    axiosService({
-      url: API.GET_MATERIAL,
-      method: 'get',
-    })
-      .then((res: any) => {
-        setMaterialTypes(res?.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        toast({
-          variant: 'destructive',
-          title: 'ناموفق',
-          description: 'متاسفانه انجام نشد صفحه را دوباره بارگزاری کنید',
-        });
-        setLoading(false);
-      });
-  };
-
-  const getRequests = () => {
-    setLoading(true);
-    const requestBody: RequestBody = {
-      userId: user?.id // این مقدار باید از context یا store گرفته شود
-    };
-
-    if (selectedStatus) {
-      requestBody.status = selectedStatus;
-    }
-
-    axiosService({
-      url: API.GET_REQUESTS,
-      method: 'post',
-      body: requestBody
-    })
-      .then((res: any) => {
-        setRequests(res?.data?.results || []);
-        setLoading(false);
-      })
-      .catch((err) => {
-        toast({
-          variant: 'destructive',
-          title: 'ناموفق',
-          description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
-        });
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    getData();
-  }, []);
-
-  useEffect(() => {
-    if (user?.id) {
-      getRequests();
-    }
-  }, [selectedStatus, user]);
-
-  const handleAddMaterial = () => {
-    setError('');
-    if (!newMaterial._id) {
-      setError('لطفاً نوع ماده را انتخاب کنید');
-      return;
-    }
-    if (newMaterial.quantity <= 0) {
-      setError('مقدار باید بیشتر از صفر باشد');
-      return;
-    }
-
-    const selectedMaterialType = materialTypes.find(m => m._id === newMaterial._id);
-    if (selectedMaterialType) {
-      const material: Material = {
-        ...selectedMaterialType,
-        quantity: newMaterial.quantity
-      };
-      setMaterials([...materials, material]);
-      setNewMaterial({ _id: '', quantity: 0 });
-    }
-  };
-
-  console.log(materials);
-
-  const handleRemoveMaterial = (id: string) => {
-    setMaterials(materials.filter(m => m._id !== id));
-  };
-
-  const formatUnit = (unit: string) => {
-    return units.find((item) => item?.key === unit)?.title;
-  };
-
-  const calculateItemPrice = (material: Material) => {
-    return material.quantity * material.pricePerUnit;
-  };
-
-  const calculateTotalPrice = () => {
-    return materials.reduce((total, material) => total + calculateItemPrice(material), 0);
-  };
-
-  const handleSaveRequest = () => {
-    if (selectedRequest) {
-      // اینجا باید API مربوط به آپدیت درخواست اضافه شود
       axiosService({
-        url: API.UPDATE_ITEMS_REQUESTS,
-        method: 'put',
-        body: {
-          requestId: selectedRequest?._id,
-          items: materials,
-          paymentMethod: paymentMethod
-        }
+        url: API.GET_REQUESTS,
+        method: 'post',
+        body: { status },
+        headers: authHeader(),
       })
-        .then((res: any) => {
-          setIsDetailsModalOpen(false);
-          setMaterials([]);
-          setError('');
-          getRequests();
-        })
-        .catch((err) => {
+        .then((res: any) => setRequests(res?.data?.results || []))
+        .catch((err: any) =>
           toast({
             variant: 'destructive',
             title: 'ناموفق',
-            description: 'متاسفانه دریافت درخواست‌ها با خطا مواجه شد',
-          });
+            description: err?.data?.message || 'دریافت کارها انجام نشد',
+          }),
+        )
+        .finally(() => {
           setLoading(false);
+          setRefreshing(false);
         });
-      // بروزرسانی لیست درخواست‌ها
-    }
-  };
+    },
+    [],
+  );
 
-  const getStatusColor = (status: Request['status']) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
-      case 'collecting':
-        return 'bg-blue-50 text-blue-700 border border-blue-200';
-      case 'completed':
-        return 'bg-green-50 text-green-700 border border-green-200';
-      case 'canceled':
-        return 'bg-red-50 text-red-700 border border-red-200';
-      default:
-        return 'bg-gray-50 text-gray-700 border border-gray-200';
-    }
-  };
+  const loadUnread = useCallback(() => {
+    axiosService({ url: API.CHAT_UNREAD, method: 'get', headers: authHeader() })
+      .then((res: any) => setUnread(res?.data?.byRequest || {}))
+      .catch(() => {
+        // A badge that fails to load is not worth a toast.
+      });
+  }, []);
 
-  const getStatusText = (status: Request['status']) => {
-    return statusOptions.find(option => option.value === status)?.label || status;
-  };
+  useEffect(() => { load(filter); loadUnread(); }, [filter, load, loadUnread]);
 
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('fa-IR').format(num);
+  /**
+   * A job in progress keeps changing — the citizen writes, the panel may
+   * cancel. Push covers the collector who has the app closed; this covers the
+   * one who is looking at the screen right now. Only the live filter polls;
+   * a finished job never changes again.
+   */
+  useEffect(() => {
+    if (filter !== 'collecting') return;
+
+    const timer = setInterval(() => { load(filter, true); loadUnread(); }, 20000);
+    const onVisible = () => { if (!document.hidden) { load(filter, true); loadUnread(); } };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [filter, load, loadUnread]);
+
+  useEffect(() => {
+    axiosService({ url: API.MY_MATERIALS, method: 'get', headers: authHeader() })
+      .then((res: any) => setMaterialTypes(res?.data || []))
+      .catch(() => {
+        // The price list only matters inside the settle sheet, which says so
+        // itself when it is empty. No toast on a screen the collector may
+        // never open.
+      });
+  }, []);
+
+  const done = (r: PasmandRequest) => {
+    setSettleFor(null);
+    toast({ variant: 'success', title: 'ثبت شد', description: 'جمع‌آوری تکمیل و به شهروند اطلاع داده شد' });
+    load(filter, true);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-[120px] sm:py-[120px] px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8 flex-col sm:flex-row gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
-              <Recycle className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-              لیست درخواست‌های بازیافت
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm">
-            <Filter className="w-5 h-5 text-gray-500" />
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="border-0 focus:ring-0 text-sm"
-            >
-              {statusOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+    <Screen>
+      <Hero
+        icon={<ClipboardList className="h-6 w-6" />}
+        title="کارهای من"
+        sub="درخواست‌هایی که پذیرفته‌اید. پس از توزین در محل، همین‌جا تسویه و تکمیل‌شان کنید."
+        aside={
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: S.s2,
+              background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.3)',
+              color: C.onHero, padding: '12px 18px', borderRadius: S.rPill,
+              fontSize: S.sm, fontWeight: 800, whiteSpace: 'nowrap',
+            }}
+          >
+            <span className="tnum">{new Intl.NumberFormat('fa-IR').format(requests.length)}</span>
+            مورد
+          </span>
+        }
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: S.s3, marginBottom: S.s4 }}>
+        <div style={{ flex: 1 }}>
+          <Segmented value={filter} onChange={setFilter} options={FILTERS} />
         </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">در حال بارگذاری...</p>
-          </div>
-        ) : requests.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl shadow-sm">
-            <p className="text-gray-500">هیچ درخواستی یافت نشد</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:gap-6">
-            {requests.map((request) => (
-              <div
-                key={request._id}
-                className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-4 sm:p-6 border border-gray-100"
-              >
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div className="space-y-3 w-full sm:w-auto">
-                    <h3 className="text-xl font-semibold text-gray-900">درخواست بازیافت</h3>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">تاریخ ثبت:</span>
-                      <span className="text-gray-700">{new Date(request.date).toLocaleDateString('fa-IR')}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">زمان جمع‌آوری:</span>
-                      <span className="text-gray-700">{request.timeSlot.date} - {request.timeSlot.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">شماره تماس:</span>
-                      <a
-                        href={`tel:${request.user.phone}`}
-                        className="flex items-center gap-2 px-2 py-1 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200 shadow-sm group"
-                        title="برای تماس کلیک کنید"
-                      >
-                        <PhoneCall className="w-5 h-5 text-green-600 group-hover:scale-110 transition-transform duration-200" />
-                        <span className="text-green-700 underline group-hover:text-green-900 font-medium">{request.user.phone}</span>
-                      </a>
-                    </div>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
-                      {getStatusText(request.status)}
-                    </span>
-                    <div className="flex items-start gap-2 bg-gray-50 p-3 rounded-xl">
-                      <MapPin className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-700">{request.location.title || 'آدرس'}</span>
-                        <span className="text-sm text-gray-600">{request.location.address || 'جزئیات آدرس موجود نیست'}</span>
-                      </div>
-                    </div>
-                    {request.collector && (
-                      <div className="bg-blue-50 p-3 rounded-xl">
-                        <p className="text-sm font-medium text-blue-800">جمع‌آوری کننده:</p>
-                        <p className="text-sm text-blue-700">
-                          {request.collector.first_name} {request.collector.last_name} - {request.collector.phone}
-                        </p>
-                      </div>
-                    )}
-                    {request.description && (
-                      <div className="bg-gray-50 p-3 rounded-xl">
-                        <p className="text-sm text-gray-600">{request.description}</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2 w-full sm:w-auto justify-end">
-                    <button
-                      onClick={() => {
-                        setSelectedRequest(request);
-                        setPaymentMethod(request.paymentMethod)
-                        setMaterials(request.items);
-                        setIsDetailsModalOpen(true);
-                      }}
-                      className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
-                      title="جزئیات و جمع‌آوری"
-                    >
-                      <span className="sm:hidden">جزئیات</span>
-                      <Eye className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedRequest(request);
-                        setPaymentMethod(request.paymentMethod)
-                        setIsAddressModalOpen(true);
-                      }}
-                      className="flex-1 sm:flex-none p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all duration-200 group flex items-center justify-center gap-2"
-                      title="نمایش آدرس"
-                    >
-                      <span className="sm:hidden">آدرس</span>
-                      <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Address Modal */}
-        {isAddressModalOpen && selectedRequest && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm modal-overlay flex items-center justify-center p-4 z-[1000000]">
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl transform transition-all duration-300">
-              <div className="p-6">
-                <div className="flex flex-row-reverse justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold">آدرس محل جمع‌آوری</h2>
-                  <button
-                    onClick={() => setIsAddressModalOpen(false)}
-                    className="p-2 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors duration-200"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-5 rounded-xl">
-                    <h3 className="font-semibold text-lg text-blue-900 mb-3">{selectedRequest.location.title || 'آدرس'}</h3>
-                    <p className="text-blue-800 leading-relaxed">{selectedRequest.location.address || 'جزئیات آدرس موجود نیست'}</p>
-                  </div>
-                </div>
-                <div className="relative h-[350px] rounded-lg mb-6 overflow-hidden border-2 border-gray-200 mt-4">
-                  <MapWithNoSSR
-                    center={selectedRequest.location || { lat: 35.6892, lng: 51.3890 }}
-                    onLocationSelect={() => { }}
-                    selectedLocation={selectedRequest.location}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Details Modal */}
-        {isDetailsModalOpen && selectedRequest && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm modal-overlay flex items-center justify-center p-4 z-[1000000]">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-4 sm:p-6">
-                <div className="flex flex-row-reverse justify-between items-center mb-8">
-                  <h2 className="text-xl sm:text-2xl font-bold">جزئیات درخواست</h2>
-                  <button
-                    onClick={() => {
-                      setIsDetailsModalOpen(false);
-                      setError('');
-                    }}
-                    className="p-2 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors duration-200"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                      <Scale className="w-5 h-5" />
-                      افزودن مواد بازیافتی
-                    </h3>
-
-                    {error && (
-                      <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100">
-                        {error}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                      <select
-                        value={newMaterial._id}
-                        onChange={(e) => {
-                          const selectedType = materialTypes.find(type => type._id === e.target.value);
-                          setNewMaterial({ ...newMaterial, ...selectedType });
-                        }}
-                        className="flex-1 py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow duration-200"
-                      >
-                        <option value="">انتخاب نوع ماده</option>
-                        {materialTypes.map((type) => (
-                          <option key={type._id} value={type._id}>
-                            {type.title}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-3 items-center">
-                        <input
-                          type="number"
-                          value={newMaterial.quantity || ''}
-                          onChange={(e) => setNewMaterial({ ...newMaterial, quantity: Number(e.target.value) })}
-                          placeholder="مقدار"
-                          className="w-full sm:w-32 py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow duration-200 text-left"
-                          min="0"
-                        />
-                        <span className="text-gray-500 whitespace-nowrap">{formatUnit(newMaterial.unit)}</span>
-                      </div>
-                      <button
-                        onClick={handleAddMaterial}
-                        className="w-full sm:w-auto px-4 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow"
-                      >
-                        <Plus className="w-5 h-5" />
-                        افزودن
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {materials.map((material) => (
-                        <div
-                          key={material._id}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gray-50 p-4 rounded-xl hover:bg-gray-100 transition-all duration-200 gap-4"
-                        >
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
-                            <span className="font-medium text-gray-900">{material.title}</span>
-                            <div className="flex flex-wrap gap-2 sm:gap-3">
-                              <span className="text-gray-600 bg-white px-3 py-1.5 rounded-full text-sm border border-gray-200">
-                                {formatNumber(material.quantity)} {formatUnit(material.unit)}
-                              </span>
-                              <span className="text-gray-600 bg-white px-3 py-1.5 rounded-full text-sm border border-gray-200">
-                                {formatNumber(material.pricePerUnit)} تومان / {formatUnit(material.unit)}
-                              </span>
-                              <span className="text-green-600 bg-green-50 px-3 py-1.5 rounded-full text-sm border border-green-200">
-                                {formatNumber(calculateItemPrice(material))} تومان
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveMaterial(material._id)}
-                            className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-all duration-200 sm:flex-shrink-0"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-
-                      {materials.length === 0 && (
-                        <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
-                          هنوز موردی اضافه نشده است
-                        </div>
-                      )}
-
-                      {materials.length > 0 && (
-                        <div className="mt-6 p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl text-white shadow-lg">
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold">جمع کل:</span>
-                            <span className="font-bold text-lg">
-                              {formatNumber(calculateTotalPrice())} تومان
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className='flex gap-4 justify-center items-center'>
-                    <div>
-                      نوع پرداخت:
-                    </div>
-                    <button
-                      onClick={() => {
-                        setPaymentMethod('wallet')
-                      }}
-                      // disabled={materials.length === 0}
-                      className={`w-full ${paymentMethod == 'wallet' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} sm:w-auto px-6 py-2.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2`}
-                    >
-                      پرداخت در کیف پول
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPaymentMethod('cash')
-                      }}
-                      // disabled={materials.length === 0}
-                      className={`w-full ${paymentMethod == 'cash' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} sm:w-auto px-6 py-2.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2`}
-                    >
-                      پرداخت نقدی
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col-reverse sm:flex-row justify-start gap-4 pt-6 border-t">
-                    <button
-                      onClick={handleSaveRequest}
-                      // disabled={materials.length === 0}
-                      className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow flex items-center justify-center gap-2"
-                    >
-                      ثبت درخواست
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsDetailsModalOpen(false);
-                        setError('');
-                      }}
-                      className="w-full sm:w-auto px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 flex items-center justify-center gap-2"
-                    >
-                      انصراف
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => load(filter, true)}
+          aria-label="بروزرسانی"
+          style={{
+            width: 46, height: 46, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center',
+            background: C.surface, border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',
+          }}
+        >
+          <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+        </button>
       </div>
-    </div>
+
+      {loading ? (
+        <div style={{ display: 'grid', gap: S.s3 }}>
+          <Shimmer height={280} />
+          <Shimmer height={280} />
+        </div>
+      ) : requests.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardList className="h-6 w-6" />}
+          title={filter === 'collecting' ? 'کار جاری ندارید' : 'موردی در این وضعیت نیست'}
+          sub={filter === 'collecting' ? 'از بخش «درخواست‌های جدید» یک کار بردارید تا اینجا بیاید.' : undefined}
+        />
+      ) : (
+        <div style={{ display: 'grid', gap: S.s3 }}>
+          {requests.map((r, i) => (
+            <RequestCard
+              key={r._id}
+              request={r}
+              index={i}
+              unread={unread[r._id] || 0}
+              onMap={() => setMapFor(r)}
+              onChat={() => { setChatFor(r._id); setUnread((u) => ({ ...u, [r._id]: 0 })); }}
+              onSettle={() => setSettleFor(r)}
+            />
+          ))}
+        </div>
+      )}
+
+      {mapFor && <MapSheet request={mapFor} onClose={() => setMapFor(null)} />}
+      {chatFor && <RequestChat requestId={chatFor} onClose={() => { setChatFor(null); loadUnread(); }} />}
+      {settleFor && (
+        <SettleSheet
+          request={settleFor}
+          materialTypes={materialTypes}
+          onClose={() => setSettleFor(null)}
+          onDone={() => done(settleFor)}
+        />
+      )}
+    </Screen>
   );
 }
 
-export default RequestsPage;
+/* ── one job ──────────────────────────────────────────────────────────────── */
+
+function RequestCard({
+  request: r,
+  index,
+  unread,
+  onMap,
+  onChat,
+  onSettle,
+}: {
+  request: PasmandRequest;
+  index: number;
+  unread: number;
+  onMap: () => void;
+  onChat: () => void;
+  onSettle: () => void;
+}) {
+  const theme = STATUS[r.status] || STATUS.pending;
+  const live = r.status === 'collecting';
+  const citizen = `${r.user?.first_name || ''} ${r.user?.last_name || ''}`.trim() || 'شهروند';
+
+  return (
+    <Card accent={theme.color}>
+      <div className="pm-fade-up" style={{ padding: S.s4, display: 'grid', gap: S.s4, animationDelay: `${index * 40}ms` }}>
+        {/* header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: S.s3 }}>
+          <IconBadge color={theme.color}><CalendarClock className="h-5 w-5" /></IconBadge>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>
+              {r.timeSlot?.date || '—'}
+            </p>
+            <p className="tnum" style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted }}>
+              ساعت {r.timeSlot?.time || '—'} · ثبت {faDate(r.date)}
+            </p>
+          </div>
+          <Chip color={theme.color}>{theme.label}</Chip>
+        </div>
+
+        {/* the citizen, and the two ways to reach them */}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: S.s3,
+            background: C.bgSubtle, border: `1px solid ${C.border}`, borderRadius: S.r1, padding: S.s3,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: S.sm, fontWeight: 800, color: C.textStrong }}>{citizen}</p>
+            <p className="tnum" dir="ltr" style={{ margin: '3px 0 0', fontSize: S.xs, color: C.muted, textAlign: 'start' }}>
+              {r.user?.phone || '—'}
+            </p>
+          </div>
+          <a href={`tel:${r.user?.phone}`} aria-label="تماس تلفنی" style={{ textDecoration: 'none' }}>
+            <span
+              style={{
+                width: 42, height: 42, borderRadius: 14, display: 'grid', placeItems: 'center',
+                background: alpha(C.green, 12), border: `1px solid ${alpha(C.green, 24)}`, color: C.green,
+              }}
+            >
+              <PhoneCall className="h-4 w-4" />
+            </span>
+          </a>
+          <button
+            type="button"
+            onClick={onChat}
+            aria-label={unread > 0 ? `گفتگو، ${unread} پیام خوانده‌نشده` : 'گفتگو'}
+            style={{
+              position: 'relative',
+              width: 42, height: 42, borderRadius: 14, display: 'grid', placeItems: 'center', cursor: 'pointer',
+              background: alpha(C.statusInfo, 12), border: `1px solid ${alpha(C.statusInfo, 24)}`, color: C.statusInfo,
+            }}
+          >
+            <MessageSquare className="h-4 w-4" />
+            {unread > 0 && (
+              <span
+                className="tnum"
+                style={{
+                  position: 'absolute', top: -5, insetInlineEnd: -5,
+                  minWidth: 19, height: 19, paddingInline: 5, borderRadius: 999,
+                  display: 'grid', placeItems: 'center',
+                  background: C.statusDanger, color: C.onAccent,
+                  fontSize: 10, fontWeight: 800, border: `2px solid ${C.surface}`,
+                }}
+              >
+                {new Intl.NumberFormat('fa-IR').format(unread)}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* address */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: S.s2 }}>
+          <MapPin className="h-4 w-4" style={{ color: C.green, flexShrink: 0, marginTop: 3 }} />
+          <p style={{ margin: 0, fontSize: S.sm, color: C.text, lineHeight: 1.9, flex: 1 }}>
+            {r.location?.address || 'آدرس ثبت نشده است'}
+          </p>
+        </div>
+
+        {/* where it stands */}
+        <div style={{ padding: `${S.s3}px ${S.s3}px 0`, borderTop: `1px solid ${C.border}` }}>
+          <StepRail
+            steps={STAGES}
+            current={stageOf(r)}
+            failed={r.status === 'canceled'}
+            color={theme.color}
+            compact
+          />
+        </div>
+
+        {/* what it came to, once it is settled */}
+        {r.status === 'completed' && (
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: S.s3,
+              padding: S.s3, borderRadius: S.r1,
+              background: alpha(C.statusOk, 9), border: `1px solid ${alpha(C.statusOk, 24)}`,
+            }}
+          >
+            <span style={{ fontSize: S.xs, fontWeight: 700, color: C.text }}>
+              مبلغ پرداختی · {r.paymentMethod === 'cash' ? 'نقدی' : 'کیف پول'}
+            </span>
+            <span className="tnum" style={{ fontSize: S.base, fontWeight: 800, color: C.statusOk }}>
+              {toman(r.totalPrice)} تومان
+            </span>
+          </div>
+        )}
+
+        {/* actions — same two-row shape as the job board, so the primary
+            action is never squeezed next to a secondary one on a narrow phone */}
+        <div style={{ display: 'grid', gap: S.s2 }}>
+          {live && (
+            <Btn full onClick={onSettle}>
+              <Scale className="h-4 w-4" />
+              توزین و تسویه
+            </Btn>
+          )}
+          <Btn variant="soft" color={C.statusInfo} full onClick={onMap}>
+            <MapPin className="h-4 w-4" />
+            نقشه
+          </Btn>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── the map sheet ────────────────────────────────────────────────────────── */
+
+function MapSheet({ request, onClose }: { request: PasmandRequest; onClose: () => void }) {
+  return (
+    <Modal onClose={onClose} wide>
+      <div style={{ padding: S.s4, display: 'flex', alignItems: 'center', gap: S.s3, borderBottom: `1px solid ${C.border}` }}>
+        <IconBadge color={C.statusInfo}><MapPin className="h-5 w-5" /></IconBadge>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>محل جمع‌آوری</p>
+          <p style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted, lineHeight: 1.8 }}>
+            {request.location?.address || '—'}
+          </p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="بستن" style={{ background: 'transparent', border: 'none', color: C.subtle, cursor: 'pointer', padding: 6 }}>
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div style={{ height: 330, position: 'relative' }}>
+        <MapWithNoSSR
+          center={request.location || { lat: 35.6892, lng: 51.389 }}
+          onLocationSelect={() => {}}
+          selectedLocation={request.location}
+        />
+      </div>
+
+      <div style={{ padding: S.s4 }}>
+        <a href={mapsUrl(request.location)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>
+          <Btn full>
+            <Navigation2 className="h-4 w-4" />
+            مسیریابی در گوگل‌مپ
+          </Btn>
+        </a>
+      </div>
+    </Modal>
+  );
+}
+
+/* ── the settle sheet ─────────────────────────────────────────────────────── */
+
+function SettleSheet({
+  request,
+  materialTypes,
+  onClose,
+  onDone,
+}: {
+  request: PasmandRequest;
+  materialTypes: MaterialType[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [items, setItems] = useState<Item[]>(request.items || []);
+  const [pick, setPick] = useState('');
+  const [qty, setQty] = useState('');
+  const [payment, setPayment] = useState<'wallet' | 'cash'>(request.paymentMethod || 'wallet');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const selected = materialTypes.find((m) => m._id === pick);
+  const total = useMemo(
+    () => items.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.pricePerUnit) || 0), 0),
+    [items],
+  );
+
+  const add = () => {
+    setError('');
+    if (!selected) return setError('نوع پسماند را انتخاب کنید');
+    const q = Number(qty);
+    if (!q || q <= 0) return setError('مقدار باید بیشتر از صفر باشد');
+    if (items.some((it) => (it.material || it._id) === selected._id)) {
+      return setError('این قلم قبلاً اضافه شده است — مقدارش را حذف و دوباره ثبت کنید');
+    }
+
+    setItems((prev) => [
+      ...prev,
+      {
+        _id: selected._id,
+        material: selected._id,
+        title: selected.title,
+        unit: selected.unit,
+        pricePerUnit: selected.pricePerUnit,
+        category: selected.category,
+        quantity: q,
+      },
+    ]);
+    setPick('');
+    setQty('');
+  };
+
+  const save = () => {
+    if (items.length === 0) return setError('حداقل یک قلم را وارد کنید');
+
+    setSaving(true);
+    axiosService({
+      url: API.UPDATE_ITEMS_REQUESTS,
+      method: 'put',
+      headers: authHeader(),
+      body: {
+        requestId: request._id,
+        paymentMethod: payment,
+        // The server re-reads each material and recomputes the price from its
+        // own tariff, so what goes up is only *what* and *how much*.
+        items: items.map((it) => ({ _id: it.material || it._id, material: it.material || it._id, quantity: it.quantity })),
+      },
+    })
+      .then(() => onDone())
+      .catch((err: any) => {
+        setError(err?.data?.message || 'ثبت تسویه انجام نشد');
+        setSaving(false);
+      });
+  };
+
+  return (
+    <Modal onClose={onClose} wide>
+      <div style={{ padding: S.s4, display: 'flex', alignItems: 'center', gap: S.s3, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, background: C.surface, zIndex: 2 }}>
+        <IconBadge color={C.green}><Scale className="h-5 w-5" /></IconBadge>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>توزین و تسویه</p>
+          <p style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted }}>
+            آنچه تحویل گرفتید را وارد کنید؛ مبلغ از تعرفهٔ روز شهر حساب می‌شود.
+          </p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="بستن" style={{ background: 'transparent', border: 'none', color: C.subtle, cursor: 'pointer', padding: 6 }}>
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div style={{ padding: S.s4, display: 'grid', gap: S.s4 }}>
+        {materialTypes.length === 0 ? (
+          <p style={{ margin: 0, fontSize: S.sm, color: C.muted, lineHeight: 1.9 }}>
+            تعرفهٔ اقلام در دسترس نیست. اتصال اینترنت را بررسی کنید و صفحه را دوباره باز کنید.
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gap: S.s3 }}>
+            <Field label="نوع پسماند">
+              <select className="pm-field" value={pick} onChange={(e) => setPick(e.target.value)}>
+                <option value="">انتخاب کنید…</option>
+                {materialTypes.map((m) => (
+                  <option key={m._id} value={m._id}>
+                    {m.title} — {toman(m.pricePerUnit)} تومان / {unitName(m.unit)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <div style={{ display: 'flex', gap: S.s2, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <Field label={`مقدار${selected ? ` (${unitName(selected.unit)})` : ''}`}>
+                  <input
+                    className="pm-field tnum"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    dir="ltr"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                    placeholder="0"
+                  />
+                </Field>
+              </div>
+              <Btn variant="soft" onClick={add} style={{ height: 52 }}>
+                <Plus className="h-4 w-4" />
+                افزودن
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <p style={{ margin: 0, padding: S.s3, borderRadius: S.r1, background: alpha(C.statusDanger, 10), border: `1px solid ${alpha(C.statusDanger, 24)}`, color: C.statusDanger, fontSize: S.xs, fontWeight: 700 }}>
+            {error}
+          </p>
+        )}
+
+        {/* the ticket */}
+        <div style={{ display: 'grid', gap: S.s2 }}>
+          {items.length === 0 ? (
+            <p style={{ margin: 0, padding: S.s5, textAlign: 'center', borderRadius: S.r1, background: C.bgSubtle, border: `1px dashed ${C.borderStrong}`, color: C.muted, fontSize: S.sm }}>
+              هنوز قلمی ثبت نشده است
+            </p>
+          ) : (
+            items.map((it) => (
+              <div
+                key={String(it.material || it._id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: S.s3,
+                  padding: S.s3, borderRadius: S.r1,
+                  background: C.bgSubtle, border: `1px solid ${C.border}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: S.sm, fontWeight: 800, color: C.textStrong }}>{it.title}</p>
+                  <p className="tnum" style={{ margin: '3px 0 0', fontSize: S.xs, color: C.muted }}>
+                    {toman(it.quantity)} {unitName(it.unit)} × {toman(it.pricePerUnit)} تومان
+                  </p>
+                </div>
+                <span className="tnum" style={{ fontSize: S.sm, fontWeight: 800, color: C.green, whiteSpace: 'nowrap' }}>
+                  {toman((Number(it.quantity) || 0) * (Number(it.pricePerUnit) || 0))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setItems((prev) => prev.filter((x) => (x.material || x._id) !== (it.material || it._id)))}
+                  aria-label={`حذف ${it.title}`}
+                  style={{ background: 'transparent', border: 'none', color: C.statusDanger, cursor: 'pointer', padding: 6, flexShrink: 0 }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* total */}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: S.s3,
+            padding: S.s4, borderRadius: S.r2,
+            background: `linear-gradient(135deg, ${C.heroStart}, ${C.heroEnd})`, color: C.onHero,
+            boxShadow: C.shadowHero,
+          }}
+        >
+          <span style={{ fontSize: S.sm, fontWeight: 700 }}>پرداختی به شهروند</span>
+          <span className="tnum" style={{ fontSize: S.lg, fontWeight: 900 }}>{toman(total)} تومان</span>
+        </div>
+
+        {/* payment method */}
+        <div>
+          <p style={{ margin: `0 0 ${S.s2}px`, fontSize: S.sm, fontWeight: 700, color: C.text }}>نحوهٔ پرداخت</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: S.s2 }}>
+            {([
+              { key: 'wallet' as const, label: 'کیف پول', icon: <Wallet className="h-4 w-4" /> },
+              { key: 'cash' as const, label: 'نقدی', icon: <Banknote className="h-4 w-4" /> },
+            ]).map((p) => {
+              const on = payment === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setPayment(p.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: S.s2,
+                    padding: '14px 12px', borderRadius: S.r2, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: S.sm, fontWeight: 800,
+                    background: on ? alpha(C.green, 12) : C.surface,
+                    color: on ? C.green : C.muted,
+                    border: `1.5px solid ${on ? C.green : C.border}`,
+                  }}
+                >
+                  {p.icon}
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <Btn full onClick={save} disabled={saving || items.length === 0}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+          ثبت نهایی و تکمیل
+        </Btn>
+      </div>
+    </Modal>
+  );
+}

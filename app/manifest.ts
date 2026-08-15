@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next"
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: "شهروند",
-        short_name: "شهروند",
-        description: "برنامه خدمات شهر",
+        name: "شهر شهر | جمع‌آوران",
+        short_name: "شهر شهر | جمع‌آوران",
+        description: "برنامهٔ خدمات‌دهندگان سامانهٔ خدمات شهری شهر شهر — پذیرش و جمع‌آوری پسماند",
         start_url: "/",
         display: "standalone",
         orientation: "portrait",

@@ -1,307 +1,279 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { User, Phone, Mail, Edit2, Camera, Package2, MapPin, Bell, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import Cookies from 'js-cookie';
+import {
+  User, Phone, Mail, Pencil, LogOut, ClipboardList, Wallet, Building2, BadgeCheck,
+  ShieldAlert, Loader2, Truck, Check, X,
+} from 'lucide-react';
+
 import { axiosService } from '@/lib/axiosService';
 import { API } from '@/services/const';
-import Cookies from 'js-cookie';
 import { useToast } from '@/hooks/use-toast';
-import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
+import { C, S, alpha } from '@/components/ui/tokens';
+import { Screen, Hero, Card, IconBadge, Btn, Chip, Field, Shimmer, SectionTitle } from '@/components/ui/kit';
+import { authHeader } from '@/lib/requests';
 
-interface UserProfile {
-  first_name: string
-  last_name: string
-  phone: string
-  email: string
-  description: string
-  has_password: boolean
-  accessible: boolean
-  personalPicture: string
-  addresses: any[]
-  pasmandRequests: any[]
+/**
+ * Who this collector is, as the city recorded them.
+ *
+ * Two halves, and the split matters: the name and contact details are theirs to
+ * correct, while the city, the services they cover and whether their access is
+ * switched on are the city's decisions. The second half is shown but not
+ * editable — a collector who could grant themselves access would make the
+ * panel's access switch meaningless.
+ *
+ * The old screen also offered "آدرس‌های من", carried over from the citizen app.
+ * A collector has no saved addresses; the ones that matter belong to the jobs.
+ */
+
+interface ServiceField { _id: string; title?: string }
+interface City { _id?: string; name?: string }
+
+interface Profile {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  email?: string;
+  description?: string;
+  accessible?: boolean;
+  city?: City | string | null;
+  serviceFields?: ServiceField[];
 }
-
-interface NotificationSetting {
-  id: string;
-  title: string;
-  description: string;
-  enabled: boolean;
-}
-
-const mockProfile: UserProfile = {
-  first_name: 'کاربر جدید',
-  last_name: '',
-  phone: '',
-  email: '',
-  description: '',
-  has_password: false,
-  accessible: false,
-  personalPicture: '',
-  addresses: [],
-  pasmandRequests: []
-};
-
-const mockNotificationSettings: NotificationSetting[] = [
-  {
-    id: 'new_price',
-    title: 'تغییرات قیمت',
-    description: 'اطلاع‌رسانی در مورد تغییرات قیمت اقلام بازیافتی',
-    enabled: true,
-  },
-  {
-    id: 'collection_reminder',
-    title: 'یادآوری جمع‌آوری',
-    description: 'یادآوری زمان مراجعه برای جمع‌آوری پسماند',
-    enabled: true,
-  },
-  {
-    id: 'special_offers',
-    title: 'پیشنهادات ویژه',
-    description: 'دریافت پیشنهادات و تخفیف‌های ویژه',
-    enabled: false,
-  },
-];
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<UserProfile>(mockProfile);
-  const [isEditing, setIsEditing] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [editedProfile, setEditedProfile] = useState<UserProfile>(mockProfile);
-  const [notifications, setNotifications] = useState<NotificationSetting[]>(mockNotificationSettings);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [draft, setDraft] = useState<Profile>({});
+  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const { logout } = useAuth()
+  const { logout } = useAuth();
   const { toast } = useToast();
 
-  const handleSaveProfile = () => {
-    updateProfile()
-    setIsEditing(false);
-  };
-
-  const toggleNotification = (id: string) => {
-    setNotifications(notifications.map(notification =>
-      notification.id === id
-        ? { ...notification, enabled: !notification.enabled }
-        : notification
-    ));
-  };
-
-  const getProfile = () => {
-    setLoading(true)
-    axiosService({
-      url: API.GET_PROFILE,
-      method: 'get',
-      token: Cookies.get('auth_token')
-    })
+  const load = () => {
+    axiosService({ url: API.GET_PROFILE, method: 'get', token: Cookies.get('auth_token') })
       .then((res: any) => {
-        setProfile(res?.data?.user)
-        setLoading(false)
-      }).catch((err) => {
-        toast({
-          variant: 'destructive',
-          title: 'ناموفق',
-          description: 'متاسفانه انجام نشد صفحه را دوباره بارگزاری کنید',
-        });
-        setLoading(false)
+        setProfile(res?.data?.user || null);
+        setDraft(res?.data?.user || {});
       })
-  }
+      .catch(() =>
+        toast({ variant: 'destructive', title: 'ناموفق', description: 'دریافت اطلاعات انجام نشد' }),
+      )
+      .finally(() => setLoading(false));
+  };
 
-  const updateProfile = () => {
-    setLoading(true)
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = () => {
+    setSaving(true);
     axiosService({
       url: API.UPDATE_PROFILE,
       method: 'put',
-      body: editedProfile,
-      token: Cookies.get('auth_token')
+      headers: authHeader(),
+      body: {
+        first_name: draft.first_name,
+        last_name: draft.last_name,
+        email: draft.email,
+        description: draft.description,
+      },
     })
       .then((res: any) => {
-        setProfile(res?.data?.user)
-        setLoading(false)
-      }).catch((err) => {
-        toast({
-          variant: 'destructive',
-          title: 'ناموفق',
-          description: 'متاسفانه انجام نشد صفحه را دوباره بارگزاری کنید',
-        });
-        setLoading(false)
+        setProfile(res?.data?.user || draft);
+        setEditing(false);
+        toast({ variant: 'success', title: 'ثبت شد', description: 'اطلاعات شما بروزرسانی شد' });
       })
-  }
+      .catch((err: any) =>
+        toast({ variant: 'destructive', title: 'ناموفق', description: err?.data?.message || 'ذخیره انجام نشد' }),
+      )
+      .finally(() => setSaving(false));
+  };
 
-  useEffect(() => {
-    getProfile()
-  }, [])
+  const fullName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'جمع‌آور';
+  const cityName = typeof profile?.city === 'object' && profile?.city ? profile.city.name : undefined;
+  const active = profile?.accessible !== false;
 
   return (
-    <div className="min-h-screen py-24 px-4">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-12">پروفایل کاربری</h1>
+    <Screen>
+      <Hero
+        icon={<Truck className="h-6 w-6" />}
+        title={fullName}
+        sub={cityName ? `جمع‌آور شهر ${cityName}` : 'جمع‌آور سامانهٔ شهر شهر'}
+        aside={
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.3)',
+              color: C.onHero, padding: '10px 16px', borderRadius: S.rPill,
+              fontSize: S.xs, fontWeight: 800, whiteSpace: 'nowrap',
+            }}
+          >
+            {active ? <BadgeCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+            {active ? 'دسترسی فعال' : 'دسترسی غیرفعال'}
+          </span>
+        }
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* ستون اصلی */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* کارت اطلاعات شخصی */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">اطلاعات شخصی</h2>
+      {loading ? (
+        <div style={{ display: 'grid', gap: S.s3 }}>
+          <Shimmer height={220} />
+          <Shimmer height={140} />
+        </div>
+      ) : (
+        <>
+          <SectionTitle
+            title="اطلاعات شخصی"
+            action={
+              !editing && (
                 <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  type="button"
+                  onClick={() => { setDraft(profile || {}); setEditing(true); }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent',
+                    border: `1px solid ${C.border}`, borderRadius: S.rPill, padding: '7px 13px',
+                    fontFamily: 'inherit', fontSize: S.xs, fontWeight: 700, color: C.green, cursor: 'pointer',
+                  }}
                 >
-                  <Edit2 className="w-5 h-5 text-gray-600" />
+                  <Pencil className="h-3.5 w-3.5" />
+                  ویرایش
                 </button>
-              </div>
+              )
+            }
+          />
 
-              {isEditing ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">نام </label>
-                    <Input
-                      type="text"
-                      value={editedProfile.first_name}
-                      onChange={(e) => setEditedProfile({ ...editedProfile, first_name: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                    />
+          <Card>
+            <div style={{ padding: S.s4, display: 'grid', gap: S.s3 }}>
+              {editing ? (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: S.s3 }}>
+                    <Field label="نام">
+                      <input className="pm-field" value={draft.first_name || ''} onChange={(e) => setDraft({ ...draft, first_name: e.target.value })} />
+                    </Field>
+                    <Field label="نام خانوادگی">
+                      <input className="pm-field" value={draft.last_name || ''} onChange={(e) => setDraft({ ...draft, last_name: e.target.value })} />
+                    </Field>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">نام خانوادگی </label>
-                    <Input
-                      type="text"
-                      value={editedProfile.last_name}
-                      onChange={(e) => setEditedProfile({ ...editedProfile, last_name: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">شماره موبایل</label>
-                    <Input
-                      type="tel"
-                      disabled
-                      value={editedProfile.phone}
-                      onChange={(e) => setEditedProfile({ ...editedProfile, phone: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">ایمیل</label>
-                    <Input
-                      type="email"
-                      value={editedProfile.email}
-                      onChange={(e) => setEditedProfile({ ...editedProfile, email: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-4 pt-4">
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
+
+                  <Field label="ایمیل" hint="اختیاری">
+                    <input className="pm-field" dir="ltr" value={draft.email || ''} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+                  </Field>
+
+                  <Field label="توضیحات" hint="مثلاً نوع خودرو یا محدودهٔ کاری شما">
+                    <textarea className="pm-field" rows={3} value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+                  </Field>
+
+                  <p style={{ margin: 0, fontSize: S.xs, color: C.muted, lineHeight: 1.9 }}>
+                    شمارهٔ همراه کلید ورود شماست و از این‌جا تغییر نمی‌کند. برای تغییر آن یا برای رمز
+                    تازه، با مدیر شهر خود تماس بگیرید.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: S.s2 }}>
+                    <Btn onClick={save} disabled={saving} style={{ flex: 1 }}>
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      ذخیره
+                    </Btn>
+                    <Btn variant="ghost" onClick={() => { setEditing(false); setDraft(profile || {}); }}>
+                      <X className="h-4 w-4" />
                       انصراف
-                    </button>
-                    <button
-                      onClick={handleSaveProfile}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                    >
-                      ذخیره تغییرات
-                    </button>
+                    </Btn>
                   </div>
-                </div>
+                </>
               ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <User className="w-5 h-5 text-gray-500" />
-                    <span>{(profile.first_name || '') + ' ' + (profile?.last_name || '')}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Phone className="w-5 h-5 text-gray-500" />
-                    <span dir="ltr">{profile.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Mail className="w-5 h-5 text-gray-500" />
-                    <span dir="ltr">{profile.email}</span>
-                  </div>
-                </div>
+                <>
+                  <Row icon={<User className="h-4 w-4" />} label="نام و نام خانوادگی" value={fullName} />
+                  <Row icon={<Phone className="h-4 w-4" />} label="شمارهٔ همراه" value={profile?.phone || '—'} ltr />
+                  <Row icon={<Mail className="h-4 w-4" />} label="ایمیل" value={profile?.email || '—'} ltr />
+                  {profile?.description && (
+                    <Row icon={<ClipboardList className="h-4 w-4" />} label="توضیحات" value={profile.description} />
+                  )}
+                </>
               )}
             </div>
+          </Card>
 
-            {/* تنظیمات اعلان‌ها */}
-            {/* <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-bold mb-6">تنظیمات اعلان‌ها</h2>
-              <div className="space-y-6">
-                {notifications.map((notification) => (
-                  <div key={notification.id} className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">{notification.title}</h3>
-                      <p className="text-sm text-gray-500">{notification.description}</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <Input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={notification.enabled}
-                        onChange={() => toggleNotification(notification.id)}
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div> */}
-          </div>
+          {/* what the city decided */}
+          <SectionTitle title="اطلاعات خدماتی" />
+          <Card>
+            <div style={{ padding: S.s4, display: 'grid', gap: S.s3 }}>
+              <Row icon={<Building2 className="h-4 w-4" />} label="شهر" value={cityName || 'ثبت نشده'} />
 
-          {/* ستون کناری */}
-          <div className="space-y-6">
-            {/* کارت آواتار */}
-            <div className="bg-white p-6 rounded-lg shadow-md text-center">
-              <div className="relative inline-block">
-                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
-                  {profile.personalPicture ? (
-                    <img
-                      src={profile.personalPicture}
-                      alt={(profile.first_name || '') + ' ' + (profile.last_name || '')}
-                      className="w-full h-full rounded-full object-cover"
-                    />
+              <div>
+                <p style={{ margin: `0 0 ${S.s2}px`, fontSize: S.xs, color: C.muted, fontWeight: 600 }}>خدمات تحت پوشش</p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {(profile?.serviceFields || []).length === 0 ? (
+                    <span style={{ fontSize: S.sm, color: C.subtle }}>موردی ثبت نشده است</span>
                   ) : (
-                    <User className="w-12 h-12 text-gray-400" />
+                    (profile?.serviceFields || []).map((f) => (
+                      <Chip key={f._id} color={C.green}>{f.title || '—'}</Chip>
+                    ))
                   )}
                 </div>
-                <button className="absolute bottom-0 right-0 p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors">
-                  <Camera className="w-4 h-4" />
-                </button>
               </div>
-              <h3 className="font-bold text-lg">{(profile.first_name || '') + ' ' + (profile.last_name || '')}</h3>
+
+              {!active && (
+                <p
+                  style={{
+                    margin: 0, padding: S.s3, borderRadius: S.r1, fontSize: S.xs, lineHeight: 1.9, fontWeight: 600,
+                    background: alpha(C.amber, 10), border: `1px solid ${alpha(C.amber, 26)}`, color: C.text,
+                  }}
+                >
+                  تا وقتی مدیر شهر دسترسی شما را فعال نکند، درخواستی برایتان نمایش داده نمی‌شود.
+                </p>
+              )}
             </div>
+          </Card>
+
+          {/* shortcuts */}
+          <SectionTitle title="دسترسی سریع" />
+          <div style={{ display: 'grid', gap: S.s3 }}>
+            <Shortcut href="/requests" icon={<ClipboardList className="h-5 w-5" />} color={C.statusInfo} title="کارهای من" sub="درخواست‌هایی که پذیرفته‌اید" />
+            <Shortcut href="/history" icon={<Wallet className="h-5 w-5" />} color={C.amber} title="سوابق و درآمد" sub="جمع‌آوری‌های تکمیل‌شده و مبالغ" />
           </div>
-        </div>
-        {/* منوی دسترسی سریع */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="font-bold mb-4">دسترسی سریع</h3>
-          <div className="space-y-2">
-            <Link href={'/history'} className="w-full p-3 text-right flex items-center gap-3 hover:bg-gray-50 rounded-lg transition-colors">
-              <Package2 className="w-5 h-5 text-gray-500" />
-              <span>درخواست های من</span>
-            </Link>
-            <Link href={'/addresses'} className="w-full p-3 text-right flex items-center gap-3 hover:bg-gray-50 rounded-lg transition-colors">
-              <MapPin className="w-5 h-5 text-gray-500" />
-              <span>آدرس‌های من</span>
-            </Link>
-            {/* <button className="w-full p-3 text-right flex items-center gap-3 hover:bg-gray-50 rounded-lg transition-colors">
-                  <Bell className="w-5 h-5 text-gray-500" />
-                  <span>اعلان‌ها</span>
-                </button> */}
-            <button
-              onClick={() => {
-                logout()
-              }}
-              className="w-full p-3 text-right flex items-center gap-3 hover:bg-gray-50 rounded-lg text-red-500 transition-colors">
-              <LogOut className="w-5 h-5" />
-              <span>خروج از حساب</span>
-            </button>
+
+          <div style={{ marginTop: S.s6 }}>
+            <Btn full variant="soft" color={C.statusDanger} onClick={logout}>
+              <LogOut className="h-4 w-4" />
+              خروج از حساب
+            </Btn>
           </div>
-        </div>
+        </>
+      )}
+    </Screen>
+  );
+}
+
+function Row({ icon, label, value, ltr }: { icon: React.ReactNode; label: string; value: string; ltr?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: S.s3 }}>
+      <IconBadge color={C.green} size={38}>{icon}</IconBadge>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: S.xs, color: C.muted, fontWeight: 600 }}>{label}</p>
+        <p
+          className={ltr ? 'tnum' : undefined}
+          dir={ltr ? 'ltr' : undefined}
+          style={{ margin: '3px 0 0', fontSize: S.sm, fontWeight: 700, color: C.textStrong, textAlign: 'start', wordBreak: 'break-word' }}
+        >
+          {value}
+        </p>
       </div>
     </div>
+  );
+}
+
+function Shortcut({ href, icon, color, title, sub }: { href: string; icon: React.ReactNode; color: string; title: string; sub: string }) {
+  return (
+    <Link href={href} style={{ textDecoration: 'none', display: 'block' }}>
+      <Card interactive>
+        <div style={{ padding: S.s4, display: 'flex', alignItems: 'center', gap: S.s3 }}>
+          <IconBadge color={color}>{icon}</IconBadge>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>{title}</p>
+            <p style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted, lineHeight: 1.75 }}>{sub}</p>
+          </div>
+        </div>
+      </Card>
+    </Link>
   );
 }

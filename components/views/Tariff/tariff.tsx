@@ -1,13 +1,30 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowUp, ArrowDown, Banknote, Scale, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+
 import { axiosService } from '@/lib/axiosService';
 import { useToast } from '@/hooks/use-toast';
 import { API } from '@/services/const';
+import { C, S, alpha } from '@/components/ui/tokens';
+import { Screen, Hero, Card, EmptyState, Shimmer, SectionTitle } from '@/components/ui/kit';
+import { authHeader, toman, unitName } from '@/lib/requests';
+
+/**
+ * The price list a collector weighs against, standing at somebody's door.
+ *
+ * The old screen rendered a five-column table on desktop and a second card list
+ * for phones — two layouts of two-word cells. Collectors read this on a phone,
+ * one row at a time, so there is one card list at every width and the number
+ * they need is the largest thing on the row.
+ *
+ * It reads the *city's own* tariff, not every city's: the endpoint used to
+ * return all of them at once, so a collector in نهاوند could be looking at
+ * اصفهان's prices.
+ */
 
 interface PriceItem {
-  id: string;
+  _id: string;
   title: string;
   pricePerUnit: number;
   unit: string;
@@ -15,235 +32,178 @@ interface PriceItem {
   category: string;
 }
 
+const CATEGORIES = ['همه', 'فلزات', 'پلاستیک', 'کاغذ', 'شیشه'];
 
-const categories = ['همه', 'فلزات', 'پلاستیک', 'کاغذ', 'شیشه'];
-
-const units = [
-  {
-    title: 'گرم',
-    key: 'g'
-  },
-  {
-    title: 'کیلوگرم',
-    key: 'kg'
-  },
-  {
-    title: 'تن',
-    key: 'ton'
-  }
-]
+/** One hue per material family, so a category reads the same on every row. */
+const CATEGORY_COLOR: Record<string, string> = {
+  فلزات: C.statusNeutral,
+  پلاستیک: C.statusInfo,
+  کاغذ: C.amber,
+  شیشه: C.violet,
+};
 
 export default function PricesPage() {
-  const [selectedCategory, setSelectedCategory] = useState('همه');
+  const [category, setCategory] = useState('همه');
   const [sortBy, setSortBy] = useState<'pricePerUnit' | 'change'>('pricePerUnit');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [loading, setLoading] = useState(false);
+  const [desc, setDesc] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PriceItem[]>([]);
   const { toast } = useToast();
 
-  const filteredAndSortedPrices = data
-    .filter(item => selectedCategory === 'همه' || item.category === selectedCategory)
-    .sort((a, b) => {
-      const order = sortOrder === 'asc' ? 1 : -1;
-      return (a[sortBy] - b[sortBy]) * order;
-    });
-
-  const formatPrice = (price: number) => {
-    return price?.toLocaleString('fa-IR');
-  };
-
-  const formatUnit = (unit: string) => {
-    return units.find((item) => item?.key === unit)?.title
-  };
-
-  const formatChange = (change: number) => {
-    return change?.toLocaleString('fa-IR', { signDisplay: 'always', minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  };
-
-  const SortButton = ({ type, label }: { type: 'pricePerUnit' | 'change'; label: string }) => (
-    <button
-      onClick={() => {
-        if (sortBy === type) {
-          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-          setSortBy(type);
-          setSortOrder('desc');
-        }
-      }}
-      className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-    >
-      {label}
-      {sortBy === type && (
-        sortOrder === 'asc' ? <ArrowUpIcon size={16} /> : <ArrowDownIcon size={16} />
-      )}
-    </button>
-  );
-
-  const getData = () => {
-    setLoading(true)
-    axiosService({
-      url: API.GET_MATERIAL,
-      method: 'get',
-    })
-      .then((res: any) => {
-        setData(res?.data)
-        setLoading(false)
-      }).catch((err) => {
+  useEffect(() => {
+    axiosService({ url: API.MY_MATERIALS, method: 'get', headers: authHeader() })
+      .then((res: any) => setData(Array.isArray(res?.data) ? res.data : []))
+      .catch((err: any) =>
         toast({
           variant: 'destructive',
           title: 'ناموفق',
-          description: 'متاسفانه انجام نشد صفحه را دوباره بارگزاری کنید',
-        });
-        setLoading(false)
-      })
-  }
+          description: err?.data?.message || 'دریافت تعرفه انجام نشد',
+        }),
+      )
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
-    getData()
-  }, [])
+  const rows = useMemo(
+    () =>
+      data
+        .filter((it) => category === 'همه' || it.category === category)
+        .sort((a, b) => ((a[sortBy] || 0) - (b[sortBy] || 0)) * (desc ? -1 : 1)),
+    [data, category, sortBy, desc],
+  );
+
+  const toggle = (key: 'pricePerUnit' | 'change') => {
+    if (sortBy === key) setDesc((d) => !d);
+    else {
+      setSortBy(key);
+      setDesc(true);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-24 px-4">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
-          قیمت روز اقلام بازیافتی
-        </h1>
+    <Screen>
+      <Hero
+        icon={<Banknote className="h-6 w-6" />}
+        title="تعرفهٔ خرید"
+        sub="قیمت روز شهر شما برای هر قلم. همین اعداد در «توزین و تسویه» اعمال می‌شوند."
+      />
 
-        {/* فیلترها */}
-        <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-          <div className="flex flex-wrap gap-4 justify-between items-center">
-            <div className="flex flex-wrap gap-2">
-              {categories.map(category => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`px-4 py-2 rounded-full transition-all ${selectedCategory === category
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* دکمه‌های مرتب‌سازی برای نمایش موبایل */}
-        <div className="md:hidden flex gap-2 mb-4">
-          <SortButton type="pricePerUnit" label="مرتب‌سازی بر اساس قیمت" />
-          <SortButton type="change" label="مرتب‌سازی بر اساس تغییرات" />
-        </div>
-
-        {/* جدول برای دسکتاپ */}
-        <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-6 py-4 text-right text-sm font-medium text-gray-500">نام کالا</th>
-                <th className="px-6 py-4 text-right text-sm font-medium text-gray-500">دسته‌بندی</th>
-                <th
-                  className="px-6 py-4 text-right text-sm font-medium text-gray-500 cursor-pointer"
-                  onClick={() => {
-                    if (sortBy === 'pricePerUnit') {
-                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                    } else {
-                      setSortBy('pricePerUnit');
-                      setSortOrder('desc');
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    قیمت (تومان)
-                    {sortBy === 'pricePerUnit' && (
-                      sortOrder === 'asc' ? <ArrowUpIcon size={16} /> : <ArrowDownIcon size={16} />
-                    )}
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-right text-sm font-medium text-gray-500">واحد</th>
-                <th
-                  className="px-6 py-4 text-right text-sm font-medium text-gray-500 cursor-pointer"
-                  onClick={() => {
-                    if (sortBy === 'change') {
-                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                    } else {
-                      setSortBy('change');
-                      setSortOrder('desc');
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    تغییرات (٪)
-                    {sortBy === 'change' && (
-                      sortOrder === 'asc' ? <ArrowUpIcon size={16} /> : <ArrowDownIcon size={16} />
-                    )}
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredAndSortedPrices.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 text-right text-sm text-gray-900 font-medium">
-                    {item.title}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {item.category}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-900">
-                    {formatPrice(item.pricePerUnit)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {formatUnit(item.unit)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm">
-                    <span className={`inline-flex items-center gap-1 ${item.change > 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                      {item.change > 0 ? <ArrowUpIcon size={16} /> : <ArrowDownIcon size={16} />}
-                      {formatChange(item.change)}٪
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* کارت‌ها برای موبایل */}
-        <div className="md:hidden grid grid-cols-1 gap-4">
-          {filteredAndSortedPrices.map((item) => (
-            <div key={item.id} className="bg-white p-4 rounded-lg shadow-md">
-              <div className="flex justify-between items-start mb-3">
-                <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm ${item.change > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                  {item.change > 0 ? <ArrowUpIcon size={14} /> : <ArrowDownIcon size={14} />}
-                  {formatChange(item.change)}٪
-                </span>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">دسته‌بندی:</span>
-                  <span className="text-gray-900">{item.category}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">قیمت:</span>
-                  <span className="text-gray-900 font-medium">{formatPrice(item.pricePerUnit)} تومان</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">واحد:</span>
-                  <span className="text-gray-900">{item.unit}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* توضیحات */}
-        <div className="mt-8 text-center text-sm text-gray-500">
-          قیمت‌های نمایش داده شده به صورت میانگین و تقریبی می‌باشند و ممکن است بر اساس شرایط و کیفیت اقلام تغییر کنند.
-        </div>
+      {/* categories */}
+      <div className="pm-scroll-x" style={{ display: 'flex', gap: S.s2, paddingBottom: S.s2 }}>
+        {CATEGORIES.map((cat) => {
+          const on = cat === category;
+          const color = CATEGORY_COLOR[cat] || C.green;
+          const count = cat === 'همه' ? data.length : data.filter((d) => d.category === cat).length;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategory(cat)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+                padding: '9px 15px', borderRadius: S.rPill, cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: S.xs, fontWeight: 800,
+                background: on ? color : alpha(color, 10),
+                color: on ? C.onAccent : color,
+                border: `1px solid ${on ? color : alpha(color, 24)}`,
+              }}
+            >
+              {cat}
+              <span className="tnum" style={{ opacity: 0.75 }}>{toman(count)}</span>
+            </button>
+          );
+        })}
       </div>
-    </div>
+
+      <SectionTitle
+        title="قیمت‌ها"
+        action={
+          <div style={{ display: 'flex', gap: 6 }}>
+            <SortBtn label="قیمت" on={sortBy === 'pricePerUnit'} desc={desc} onClick={() => toggle('pricePerUnit')} />
+            <SortBtn label="تغییر" on={sortBy === 'change'} desc={desc} onClick={() => toggle('change')} />
+          </div>
+        }
+      />
+
+      {loading ? (
+        <div style={{ display: 'grid', gap: S.s2 }}>
+          <Shimmer height={78} />
+          <Shimmer height={78} />
+          <Shimmer height={78} />
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={<Scale className="h-6 w-6" />}
+          title={data.length === 0 ? 'تعرفه‌ای برای شهر شما ثبت نشده' : 'در این دسته قلمی نیست'}
+          sub={data.length === 0 ? 'مدیر پسماند شهر باید قیمت‌ها را در پنل وارد کند.' : undefined}
+        />
+      ) : (
+        <div style={{ display: 'grid', gap: S.s2 }}>
+          {rows.map((item, i) => {
+            const color = CATEGORY_COLOR[item.category] || C.green;
+            const change = Number(item.change) || 0;
+            const Trend = change > 0 ? TrendingUp : change < 0 ? TrendingDown : Minus;
+            const trendColor = change > 0 ? C.statusOk : change < 0 ? C.statusDanger : C.subtle;
+
+            return (
+              <Card key={item._id}>
+                <div className="pm-fade-up" style={{ padding: S.s3, display: 'flex', alignItems: 'center', gap: S.s3, animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                  {/* The category's initial rather than a banknote on every row. */}
+                  <span
+                    style={{
+                      width: 44, height: 44, borderRadius: 15, flexShrink: 0, display: 'grid', placeItems: 'center',
+                      background: alpha(color, 12), border: `1px solid ${alpha(color, 24)}`, color,
+                      fontSize: S.sm, fontWeight: 800,
+                    }}
+                  >
+                    {(item.category || '؟').slice(0, 1)}
+                  </span>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: S.base, fontWeight: 800, color: C.textStrong }}>{item.title}</p>
+                    <p style={{ margin: '4px 0 0', fontSize: S.xs, color: C.muted }}>
+                      {item.category} • هر {unitName(item.unit)}
+                    </p>
+                  </div>
+
+                  <div style={{ textAlign: 'end', flexShrink: 0 }}>
+                    <p className="tnum" style={{ margin: 0, fontSize: S.md, fontWeight: 900, color: C.green, whiteSpace: 'nowrap' }}>
+                      {toman(item.pricePerUnit)}
+                      <span style={{ fontSize: S.xs, fontWeight: 600, color: C.muted, marginInlineStart: 4 }}>تومان</span>
+                    </p>
+                    <p
+                      className="tnum"
+                      style={{ margin: '4px 0 0', fontSize: S.xs, fontWeight: 700, color: trendColor, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                    >
+                      <Trend className="h-3 w-3" />
+                      {change === 0 ? 'بدون تغییر' : `${toman(Math.abs(change))}٪`}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </Screen>
+  );
+}
+
+function SortBtn({ label, on, desc, onClick }: { label: string; on: boolean; desc: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontFamily: 'inherit',
+        padding: '7px 12px', borderRadius: S.rPill, fontSize: S.xs, fontWeight: 700,
+        background: on ? alpha(C.green, 12) : 'transparent',
+        color: on ? C.green : C.muted,
+        border: `1px solid ${on ? alpha(C.green, 26) : C.border}`,
+      }}
+    >
+      {label}
+      {on && (desc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />)}
+    </button>
   );
 }

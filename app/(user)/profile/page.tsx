@@ -2,7 +2,7 @@ import ProfilePage from "@/components/views/Profile/profile";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'صفحه پروفایل کاربری',
+  title: 'پروفایل',
   description: ''
 }
 
