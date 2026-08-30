@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Providers } from './providers';
 import { Toaster } from '@/components/ui/toaster';
+import RouteProgress from '@/components/route-progress';
 import { AuthProvider } from '@/context/auth-context';
 import QueryProvider from '@/components/query-provider';
 import PushRegister from '@/components/push-register';
@@ -68,6 +69,8 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/iransans/IRANSansWeb_Bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className="font-sans">
+        {/* Same bar as the citizen app — see components/route-progress.tsx. */}
+        <RouteProgress />
         <AuthProvider>
           <QueryProvider>
             <Providers>
