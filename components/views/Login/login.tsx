@@ -148,7 +148,7 @@ export default function LoginPage() {
           <div>
             <h2 style={{ margin: 0, fontSize: S.lg, fontWeight: 800, color: C.textStrong }}>ورود به حساب</h2>
             <p style={{ margin: `${S.s2}px 0 0`, fontSize: S.xs, color: C.muted, lineHeight: 1.9 }}>
-              با شمارهٔ همراه و رمزی که شهرداری شهر شما صادر کرده وارد شوید.
+              با شمارهٔ همراه و رمزی که برای شما صادر شده وارد شوید.
             </p>
           </div>
 
